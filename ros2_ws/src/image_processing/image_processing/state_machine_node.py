@@ -8,7 +8,7 @@ class StateMachineNode(Node):
         self.state_machine_sub = self.create_subscription(CubeTracking, "cube_location_info", self.state_machine_callback, 10)
 
     def state_machine_callback(self, msg: CubeTracking):
-
+        pass
 
 def main(args=None):
     rclpy.init()
