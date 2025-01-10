@@ -1,0 +1,2 @@
+int8 x_center
+float32 distance
