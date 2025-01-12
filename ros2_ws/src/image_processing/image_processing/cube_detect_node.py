@@ -69,8 +69,8 @@ class CubeDetectNode(Node):
         # cube_maskC_msg = self.bridge.cv2_to_compressed_imgmsg(frame)
         # self.cube_maskC_pub.publish(cube_maskC_msg)
         msg = CubeTracking()
-        msg.x_center.data = cube_center_x
-        msg.distance.data = cube_dist_msg
+        msg.x_center = cube_center_x
+        msg.distance = cube_dist_msg
         self.location_pub.publish(msg)
     
 def main(args=None):
