@@ -12,7 +12,7 @@ class StateMachineNode(Node):
 
         self.FOV_XY = 480,680
         self.MAX_SPEED = 100
-        self.NORM_SPEED = 68
+        self.NORM_SPEED = 50
         self.MAX_DELTA = self.MAX_SPEED - self.NORM_SPEED
 
         self.block_align = False
