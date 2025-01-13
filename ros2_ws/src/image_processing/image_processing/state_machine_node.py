@@ -22,6 +22,14 @@ class StateMachineNode(Node):
         self.p_gainL, self.i_gainL, self.d_gainL = 1,0,0
         self.p_gainR, self.i_gainR, self.d_gainR = 1,0,0
 
+        # 360 scan variables
+        self.scan_360_active = False
+        self.detected_objects = []
+        self.current_angle = 0.0
+        self.imu_angle_start = None
+        self.spin_speed = 30 #30 is placeholder
+
+
         self.state_machine_sub = self.create_subscription(CubeTracking, "cube_location_info", self.state_machine_callback, 10)
 
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
@@ -31,6 +39,30 @@ class StateMachineNode(Node):
         dT = (self.clock.now() - self.prev_time).nanoseconds/1e9
         deltaL, deltaR = 0,0
         norm_speed = 0 #no decel
+        
+        if self.scan_360_active:
+            #read imu angle
+            imu_angle = self.get_current_imu_angle() #fix below
+            # if self.imu_angle_start is not None:
+            #     self.current_angle = (imu_angle - self.imu_angle_start) % 360
+
+            #if object is detected
+            if msg.center_x is not None:
+                cube_angle = self.current_angle
+                cube_distance = msg.distance
+                self.detected_objects.append((cube_angle, cube_distance))
+            
+            #if scan is complete
+            if self.current_angle >= 360:
+                self.scan_360_active = False
+                self.handle_scan_results()
+
+            #robot spins
+            motor_msg = MotorCommand()
+            motor_msg.left_speed = -self.spin_speed
+            motor_msg.right_speed = self.spin_speed
+            self.motor_pub.publish(motor_msg)
+
 
         #Drive until condition is met
         if self.drive_condition(msg):
@@ -61,6 +93,27 @@ class StateMachineNode(Node):
 
         self.prev_time = self.clock.now() #in case state_machine takes a bit to run
         self.motor_pub.publish(motor_msg)
+
+    def start_360_scan(self):
+        self.scan_360_active = True
+        self.detected_objects = []
+        self.imu_angle_start = self.get_current_imu_angle()
+        self.current_angle = 0.0
+    
+    def handle_scan_results(self):
+        #find closest object
+        closest_object = None
+        min_distance = float('inf')
+        for obj in self.detected_objects:
+            if obj[1] < min_distance:  # Compare the distance
+                min_distance = obj[1]
+                closest_object = obj
+        #put closest object into pid somehow
+
+
+    # def get_current_imu_angle(self):
+    #     pass
+
         
     def drive_condition(self, cube_dist):
         #can be more complex
