@@ -25,7 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'cube_detect_subscriber = image_processing.cube_detect_node:main',
-            'state_machine_subscriber = image_processing.state_machine_node:main'
+            'state_machine_subscriber = image_processing.state_machine_node:main',
+            'raven_subscriber = image_processing.raven_node:main'
         ],
     },
 )
