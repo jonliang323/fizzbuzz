@@ -5,18 +5,18 @@ from image_processing_interfaces.msg import CubeTracking
 from image_processing_interfaces.msg import MotorCommand
 
 #imu initialization
-from icm42688 import ICM42688
-import board
+# from icm42688 import ICM42688
+# import board
 
-spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
+# spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
 
-while not spi.try_lock():
-    pass
+# while not spi.try_lock():
+#     pass
 
-spi.configure(baudrate=5000000)
+# spi.configure(baudrate=5000000)
 
-imu = ICM42688(spi)
-imu.begin()
+# imu = ICM42688(spi)
+# imu.begin()
 
 class StateMachineNode(Node):
     def __init__(self):
@@ -85,22 +85,24 @@ class StateMachineNode(Node):
 
         # PID alignment, while still or driving; cube to align to depends on msg.center_x
         if self.block_align:
-            cur_align_error = self.FOV_XY[0]//2 - msg.center_x
-            #capped integral terms
-            self.error_integralL = min(self.error_integralL + cur_align_error*dT, self.MAX_DELTA/self.i_gainL)
-            self.error_integralR = min(self.error_integralR + cur_align_error*dT, self.MAX_DELTA/self.i_gainR)
-            error_deriv = (cur_align_error - self.prev_align_error)/dT
+            #no see block, drive straight
+            if msg.center_x is not None:
+                cur_align_error = self.FOV_XY[0]//2 - msg.center_x
+                #capped integral terms
+                self.error_integralL = min(self.error_integralL + cur_align_error*dT, self.MAX_DELTA/self.i_gainL)
+                self.error_integralR = min(self.error_integralR + cur_align_error*dT, self.MAX_DELTA/self.i_gainR)
+                error_deriv = (cur_align_error - self.prev_align_error)/dT
 
-            if self.error_integralL == self.MAX_DELTA/self.i_gainL:
-                print("Left integral saturated")
-            if self.error_integralR == self.MAX_DELTA/self.i_gainR:
-                print("Right integral saturated")
-            
-            #capped deltas
-            deltaL = min(self.p_gainL * cur_align_error + self.i_gainL * self.error_integralL + self.d_gainL * error_deriv, self.MAX_DELTA)
-            deltaR = min(self.p_gainR * cur_align_error + self.i_gainR * self.error_integralR + self.d_gainR * error_deriv, self.MAX_DELTA)
+                if self.error_integralL == self.MAX_DELTA/self.i_gainL:
+                    print("Left integral saturated")
+                if self.error_integralR == self.MAX_DELTA/self.i_gainR:
+                    print("Right integral saturated")
+                
+                #capped deltas
+                deltaL = min(self.p_gainL * cur_align_error + self.i_gainL * self.error_integralL + self.d_gainL * error_deriv, self.MAX_DELTA)
+                deltaR = min(self.p_gainR * cur_align_error + self.i_gainR * self.error_integralR + self.d_gainR * error_deriv, self.MAX_DELTA)
 
-            self.prev_align_error = cur_align_error
+                self.prev_align_error = cur_align_error
         
         motor_msg = MotorCommand()
         motor_msg.left_speed = norm_speed + deltaL

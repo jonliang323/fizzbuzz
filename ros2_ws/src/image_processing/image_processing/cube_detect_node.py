@@ -14,7 +14,7 @@ class CubeDetectNode(Node):
         self.image_sub = self.create_subscription(CompressedImage, "image_raw/compressed", self.image_callback, 10)
 
         # self.cube_maskBW_pub = self.create_publisher(CompressedImage, "cube_maskBW/compressed", 10)
-        # self.cube_box_pub = self.create_publisher(CompressedImage, "cube_box/compressed", 10)
+        self.cube_box_pub = self.create_publisher(CompressedImage, "cube_box/compressed", 10)
         # self.cube_maskC_pub = self.create_publisher(CompressedImage, "cube_maskC/compressed", 10)
         self.location_pub = self.create_publisher(CubeTracking, "cube_location_info", 10)
         
@@ -32,12 +32,12 @@ class CubeDetectNode(Node):
         )
 
         contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        # frame_box = np.copy(frame)
+        frame_box = np.copy(frame)
         x,y,w,h = None,None,None,None
         if len(contours) != 0:
             c = max(contours, key = cv2.contourArea)
             x,y,w,h = cv2.boundingRect(c)
-            # cv2.rectangle(frame_box,(x,y),(x+w,y+h),(0,0,255),2) #output 2 bounding box
+            cv2.rectangle(frame_box,(x,y),(x+w,y+h),(0,0,255),2) #output 2 bounding box
         
         
         #output 3 mask on image
@@ -48,7 +48,8 @@ class CubeDetectNode(Node):
         #output 4 print distance to cube
         
         if x is None:
-            cube_dist_msg = None
+            cube_center_x = -1
+            cube_dist_msg = -1.0
         else:
             y_px = (w+h)/2 #from bounding box
             h_px = frame.shape[0]
@@ -63,14 +64,14 @@ class CubeDetectNode(Node):
         # cube_maskBW_msg = self.bridge.cv2_to_compressed_imgmsg(mask) #-> compress for transport
         # self.cube_maskBW_pub.publish(cube_maskBW_msg)
 
-        # cube_box_msg = self.bridge.cv2_to_compressed_imgmsg(frame_box)
-        # self.cube_box_pub.publish(cube_box_msg)
+        cube_box_msg = self.bridge.cv2_to_compressed_imgmsg(frame_box)
+        self.cube_box_pub.publish(cube_box_msg)
 
         # cube_maskC_msg = self.bridge.cv2_to_compressed_imgmsg(frame)
         # self.cube_maskC_pub.publish(cube_maskC_msg)
         msg = CubeTracking()
-        msg.x_center = cube_center_x
-        msg.distance = cube_dist_msg
+        msg.x_center = int(cube_center_x)
+        msg.distance = float(cube_dist_msg)
         self.location_pub.publish(msg)
     
 def main(args=None):
