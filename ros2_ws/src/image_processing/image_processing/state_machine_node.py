@@ -4,6 +4,20 @@ from rclpy.clock import Clock
 from image_processing_interfaces.msg import CubeTracking
 from image_processing_interfaces.msg import MotorCommand
 
+#imu initialization
+from icm42688 import ICM42688
+import board
+
+spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
+
+while not spi.try_lock():
+    pass
+
+spi.configure(baudrate=5000000)
+
+imu = ICM42688(spi)
+imu.begin()
+
 class StateMachineNode(Node):
     def __init__(self):
         super().__init__('state_machine_subscriber')
@@ -42,7 +56,7 @@ class StateMachineNode(Node):
         
         if self.scan_360_active:
             #read imu angle
-            imu_angle = self.get_current_imu_angle() #fix below
+            imu_angle = self.get_current_imu_angle() 
             # if self.imu_angle_start is not None:
             #     self.current_angle = (imu_angle - self.imu_angle_start) % 360
 
@@ -56,6 +70,7 @@ class StateMachineNode(Node):
             if self.current_angle >= 360:
                 self.scan_360_active = False
                 self.handle_scan_results()
+                self.block_align = True
 
             #robot spins
             motor_msg = MotorCommand()
@@ -111,8 +126,16 @@ class StateMachineNode(Node):
         #put closest object into pid somehow
 
 
-    # def get_current_imu_angle(self):
-    #     pass
+    def get_current_imu_angle(self):
+        accel, gyro = imu.get_data()
+        # Returned linear acceleration is a tuple of (X, Y, Z) m/s^2
+        # Returned gyroscope reading is a tuple of (X, Y, Z) radian/s
+
+        cur_time = self.clock.now()
+        dT = (cur_time - self.prev_time).nanoseconds/1e9
+        rotation_z = gyro[2]
+        imu_angle_read = rotation_z * dT
+        return imu_angle_read
 
         
     def drive_condition(self, cube_dist):
