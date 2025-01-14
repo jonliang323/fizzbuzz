@@ -13,12 +13,13 @@ class TestMotorNode(Node): #replaces state machine, which may be complicated to 
         #for testing:
         #if bb is on left of screen, turn left, if on right, turn right
         #if far, move faster
-        speed = int(msg.distance*10)#2.3 -> 23
-        l_sign = -1 if msg.x_center < 680/2 else 1
-        r_sign = 1 if msg.x_center < 680/2 else -1
+        speed = int(msg.distance*5/2-25) #0 -> 50 at range 10cm to 30cm
+        if speed > 50:
+            speed = 100
         motor_msg = MotorCommand()
-        motor_msg.left_speed = l_sign*speed
-        motor_msg.right_speed = r_sign*speed
+        motor_msg.left_speed = speed
+        motor_msg.right_speed = speed
+        print(motor_msg.left_speed, motor_msg.right_speed)
         self.motor_pub.publish(motor_msg)
     
 def main(args=None):

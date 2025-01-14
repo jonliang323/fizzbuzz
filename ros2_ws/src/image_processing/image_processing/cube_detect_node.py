@@ -51,12 +51,13 @@ class CubeDetectNode(Node):
             cube_center_x = -1
             cube_dist = -1.0
         else:
-            y_px = (w+h)/2 #from bounding box
+            y_px = h #from bounding box
             h_px = frame.shape[0]
-            h_mm = 2 #mm, param, to adjust
-            f = 1 #mm, param, to adjust
+            h_mm = 1 #mm, param, to adjust
+            f = 2 #mm, param, to adjust
+            k = 1 #linear offset
             L = 2*25.4 #mm
-            cube_dist = L*f*h_px/(h_mm*y_px)/10 #cm
+            cube_dist = round(L*f*h_px/(h_mm*y_px)/10 - k,2) #cm
             cube_center_x = x + w//2
         print(cube_dist, cube_center_x)
 
