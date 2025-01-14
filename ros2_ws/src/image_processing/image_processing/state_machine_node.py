@@ -1,6 +1,9 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.clock import Clock
+from icm42688 import ICM42688
+import board
+import busio
 from image_processing_interfaces.msg import CubeTracking
 from image_processing_interfaces.msg import MotorCommand
 
@@ -33,6 +36,18 @@ class StateMachineNode(Node):
         self.state_machine_sub = self.create_subscription(CubeTracking, "cube_location_info", self.state_machine_callback, 10)
 
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
+
+        #imu initialization
+        spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
+
+        while not spi.try_lock():
+            pass
+
+        spi.configure(baudrate=5000000)
+
+        self.imu = ICM42688(spi)
+        self.imu.begin()
+
 
     def state_machine_callback(self, msg: CubeTracking):
         dT = (self.clock.now() - self.prev_time).nanoseconds/1e9
@@ -118,6 +133,7 @@ class StateMachineNode(Node):
     def get_current_imu_angle(self):
         cur_time = self.clock.now()
         dT = (cur_time - self.prev_time).nanoseconds/1e9
+        accel, gyro = self.imu.get_data()
         rotation_z = gyro[2]
         imu_angle_read = rotation_z * dT
         return imu_angle_read
