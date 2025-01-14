@@ -1,2 +1,2 @@
-int8 left_speed
-int8 right_speed
+DCCommand drive_motors
+ServoCommand actuate_motors

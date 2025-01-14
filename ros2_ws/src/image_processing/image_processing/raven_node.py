@@ -29,17 +29,24 @@ class RavenNode(Node):
         #self.imu_pub = self.create_publisher(IMUInfo, "imu_info", 10)
 
     def raven_callback(self, msg: MotorCommand):
-        print('in the callback')
+        dc = msg.drive_motors
+        servo = msg.actuate_motors
+
+        #print('in the callback')
         # Speed controlled:
         self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH1, 100) # Let the motor use all the torque to get to speed factor
-        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, msg.left_speed)
+        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, dc.left_speed)
         
         self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH3, 100)
-        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH3, msg.right_speed)
+        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH3, dc.right_speed)
 
         # Torque controlled:
         # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, 100) # Make motor try to run at max speed forward
         # self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH1, 10) # Let it use up to 10% available torque
+
+        # Set the servo 1 to x degrees with custom pulse microseconds
+        # self.raven_board.set_servo_position(Raven.ServoChannel.CH1, servo.angle, servo.min_us, servo.max_us)
+        self.raven_board.set_servo_position(Raven.ServoChannel.CH1, servo.angle, 500, 2500)
 
         #send imu info on refresh
         #imu_msg = IMUInfo()

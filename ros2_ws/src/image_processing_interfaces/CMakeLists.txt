@@ -16,7 +16,8 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   msg/CubeTracking.msg
   msg/MotorCommand.msg
-  msg/IMUInfo.msg
+  msg/DCCommand.msg
+  msg/ServoCommand.msg
 ) 
 
 if(BUILD_TESTING)
