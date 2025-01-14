@@ -49,16 +49,16 @@ class CubeDetectNode(Node):
         
         if x is None:
             cube_center_x = -1
-            cube_dist_msg = -1.0
+            cube_dist = -1.0
         else:
             y_px = (w+h)/2 #from bounding box
             h_px = frame.shape[0]
             h_mm = 2 #mm, param, to adjust
             f = 1 #mm, param, to adjust
             L = 2*25.4 #mm
-            cube_dist_msg = L*f*h_px/(h_mm*y_px)/10 #cm
+            cube_dist = L*f*h_px/(h_mm*y_px)/10 #cm
             cube_center_x = x + w//2
-        print(cube_dist_msg, cube_center_x)
+        print(cube_dist, cube_center_x)
 
 
         # cube_maskBW_msg = self.bridge.cv2_to_compressed_imgmsg(mask) #-> compress for transport
@@ -69,10 +69,10 @@ class CubeDetectNode(Node):
 
         # cube_maskC_msg = self.bridge.cv2_to_compressed_imgmsg(frame)
         # self.cube_maskC_pub.publish(cube_maskC_msg)
-        msg = CubeTracking()
-        msg.x_center = int(cube_center_x)
-        msg.distance = float(cube_dist_msg)
-        self.location_pub.publish(msg)
+        cube_info_msg = CubeTracking()
+        cube_info_msg.x_center = int(cube_center_x)
+        cube_info_msg.distance = float(cube_dist)
+        self.location_pub.publish(cube_info_msg)
     
 def main(args=None):
     rclpy.init()

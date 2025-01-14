@@ -4,20 +4,6 @@ from rclpy.clock import Clock
 from image_processing_interfaces.msg import CubeTracking
 from image_processing_interfaces.msg import MotorCommand
 
-#imu initialization
-# from icm42688 import ICM42688
-# import board
-
-# spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
-
-# while not spi.try_lock():
-#     pass
-
-# spi.configure(baudrate=5000000)
-
-# imu = ICM42688(spi)
-# imu.begin()
-
 class StateMachineNode(Node):
     def __init__(self):
         super().__init__('state_machine_subscriber')
@@ -49,7 +35,6 @@ class StateMachineNode(Node):
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
 
     def state_machine_callback(self, msg: CubeTracking):
-        cur_time = self.clock.now()
         dT = (self.clock.now() - self.prev_time).nanoseconds/1e9
         deltaL, deltaR = 0,0
         norm_speed = 0 #no decel
@@ -129,10 +114,6 @@ class StateMachineNode(Node):
 
 
     def get_current_imu_angle(self):
-        accel, gyro = imu.get_data()
-        # Returned linear acceleration is a tuple of (X, Y, Z) m/s^2
-        # Returned gyroscope reading is a tuple of (X, Y, Z) radian/s
-
         cur_time = self.clock.now()
         dT = (cur_time - self.prev_time).nanoseconds/1e9
         rotation_z = gyro[2]
