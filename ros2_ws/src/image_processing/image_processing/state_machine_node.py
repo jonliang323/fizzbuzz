@@ -60,11 +60,13 @@ class StateMachineNode(Node):
             # if self.imu_angle_start is not None:
             #     self.current_angle = (imu_angle - self.imu_angle_start) % 360
 
-            #if object is detected
-            if msg.center_x is not None:
+            #if object is detected at center
+            if msg.center_x == 340:
                 cube_angle = self.current_angle
                 cube_distance = msg.distance
                 self.detected_objects.append((cube_angle, cube_distance))
+                
+                
             
             #if scan is complete
             if self.current_angle >= 360:
