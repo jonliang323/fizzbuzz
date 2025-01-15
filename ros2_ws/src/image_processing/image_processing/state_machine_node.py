@@ -107,7 +107,8 @@ class StateMachineNode(Node):
                 self.prev_align_error = cur_align_error
         
         motor_msg = MotorCommand()
-        motor_msg.left_speed = norm_speed + deltaL
+        dc = motor_msg.drive_motors
+        dc.left_speed = norm_speed + deltaL
         motor_msg.right_speed = norm_speed + deltaR
 
         self.prev_time = self.clock.now() #in case state_machine takes a bit to run
