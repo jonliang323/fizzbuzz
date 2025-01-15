@@ -13,8 +13,8 @@ class CubeDetectNode(Node):
         self.bridge = CvBridge()
         self.image_sub = self.create_subscription(CompressedImage, "image_raw/compressed", self.image_callback, 10)
 
-        self.masked_frame_pub = self.create_publisher(CompressedImage, "masked_frame/compressed", 10)
-        # self.cut_frame_pub = self.create_publisher(CompressedImage, "cut_frame/compressed", 10)
+        #self.masked_frame_pub = self.create_publisher(CompressedImage, "masked_frame/compressed", 10)
+        self.cut_frame_pub = self.create_publisher(CompressedImage, "cut_frame/compressed", 10)
         # self.cube_maskC_pub = self.create_publisher(CompressedImage, "cube_maskC/compressed", 10)
         #self.location_pub = self.create_publisher(CubeTracking, "cube_location_info", 10)
         
@@ -27,8 +27,8 @@ class CubeDetectNode(Node):
             np.array([int(190/2),int(0.5*255),int(0.1*255)]), #min hsv blue 228 60 20
             np.array([int(240/2),int(8*255),int(0.5*255)]), #max hsv blue
         )
-        # first_row = max(np.where(mask == 255)[0])
-        # frame[:first_row+1] = (0,0,0) #same size image
+        first_row = max(np.where(mask == 255)[0])
+        frame[:first_row+1] = (0,0,0) #same size image
 
         # frame = cv2.medianBlur(frame, 51)
         
@@ -50,9 +50,9 @@ class CubeDetectNode(Node):
         
         
         #output mask on image
-        mask_3c = cv2.merge([mask,mask,mask])
-        white_im = np.full_like(frame, (255,255,255))
-        masked_frame = np.where(mask_3c == (255,255,255), white_im, frame)
+        # mask_3c = cv2.merge([mask,mask,mask])
+        # white_im = np.full_like(frame, (255,255,255))
+        # masked_frame = np.where(mask_3c == (255,255,255), white_im, frame)
 
         # #output 4 print distance to cube
         
@@ -71,11 +71,11 @@ class CubeDetectNode(Node):
         # print(cube_dist, cube_center_x)
 
 
-        masked_frame_msg = self.bridge.cv2_to_compressed_imgmsg(masked_frame) #-> compress for transport
-        self.masked_frame_pub.publish(masked_frame_msg)
+        # masked_frame_msg = self.bridge.cv2_to_compressed_imgmsg(masked_frame) #-> compress for transport
+        # self.masked_frame_pub.publish(masked_frame_msg)
 
-        # cut_frame_msg = self.bridge.cv2_to_compressed_imgmsg(frame)
-        # self.cut_frame_pub.publish(cut_frame_msg)
+        cut_frame_msg = self.bridge.cv2_to_compressed_imgmsg(frame)
+        self.cut_frame_pub.publish(cut_frame_msg)
 
         # # cube_maskC_msg = self.bridge.cv2_to_compressed_imgmsg(frame)
         # # self.cube_maskC_pub.publish(cube_maskC_msg)
