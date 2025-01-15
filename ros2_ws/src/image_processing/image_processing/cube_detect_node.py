@@ -59,7 +59,7 @@ class CubeDetectNode(Node):
             L = 2*25.4 #mm
             cube_dist = round(L*f*h_px/(h_mm*y_px)/10 - k,2) #cm
             cube_center_x = x + w//2
-        print(cube_dist, cube_center_x)
+        # print(cube_dist, cube_center_x)
 
 
         # cube_maskBW_msg = self.bridge.cv2_to_compressed_imgmsg(mask) #-> compress for transport

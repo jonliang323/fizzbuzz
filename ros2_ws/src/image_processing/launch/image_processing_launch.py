@@ -14,6 +14,12 @@ def generate_launch_description():
         output='screen'
     )
 
+    # state_machine_node = Node(
+    #     package = 'image_processing',
+    #     executable = 'state_machine_subscriber',
+    #     output = 'screen'
+    # )
+
     raven_node = Node(
         package='image_processing',
         executable='raven_subscriber',
@@ -21,3 +27,4 @@ def generate_launch_description():
     )
 
     return LaunchDescription([cube_detect_node, test_motor_node, raven_node])
+    # return LaunchDescription([cube_detect_node, state_machine_node, raven_node])

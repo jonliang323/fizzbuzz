@@ -26,7 +26,7 @@ class StateMachineNode(Node):
         self.p_gainR, self.i_gainR, self.d_gainR = 1,0,0
 
         # 360 scan variables
-        self.scan_360_active = False
+        self.scan_360_active = True
         self.detected_objects = []
         self.current_angle = 0.0
         self.imu_angle_start = None
@@ -61,7 +61,7 @@ class StateMachineNode(Node):
             #     self.current_angle = (imu_angle - self.imu_angle_start) % 360
 
             #if object is detected at center
-            if msg.center_x == 340:
+            if msg.x_center == 340:
                 cube_angle = self.current_angle
                 cube_distance = msg.distance
                 self.detected_objects.append((cube_angle, cube_distance))
@@ -76,20 +76,21 @@ class StateMachineNode(Node):
 
             #robot spins
             motor_msg = MotorCommand()
-            motor_msg.left_speed = -self.spin_speed
-            motor_msg.right_speed = self.spin_speed
+            dc = motor_msg.drive_motors
+            dc.left_speed = -self.spin_speed
+            dc.right_speed = self.spin_speed
             self.motor_pub.publish(motor_msg)
 
 
         #Drive until condition is met
-        if self.drive_condition(msg):
+        if self.drive_condition(msg.distance):
             norm_speed = self.NORM_SPEED
 
         # PID alignment, while still or driving; cube to align to depends on msg.center_x
         if self.block_align:
             #no see block, drive straight
-            if msg.center_x is not None:
-                cur_align_error = self.FOV_XY[0]//2 - msg.center_x
+            if msg.x_center is not None:
+                cur_align_error = self.FOV_XY[0]//2 - msg.x_center
                 #capped integral terms
                 self.error_integralL = min(self.error_integralL + cur_align_error*dT, self.MAX_DELTA/self.i_gainL)
                 self.error_integralR = min(self.error_integralR + cur_align_error*dT, self.MAX_DELTA/self.i_gainR)
@@ -107,8 +108,11 @@ class StateMachineNode(Node):
                 self.prev_align_error = cur_align_error
         
         motor_msg = MotorCommand()
-        motor_msg.left_speed = norm_speed + deltaL
-        motor_msg.right_speed = norm_speed + deltaR
+        dc = motor_msg.drive_motors
+        dc.left_speed = norm_speed + deltaL
+        dc.right_speed = norm_speed + deltaR
+        # dc.left_speed = self.NORM_SPEED + deltaL
+        # dc.right_speed = self.NORM_SPEED + deltaR
 
         self.prev_time = self.clock.now() #in case state_machine takes a bit to run
         self.motor_pub.publish(motor_msg)
