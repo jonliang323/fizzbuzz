@@ -27,8 +27,17 @@ class CubeDetectNode(Node):
             np.array([int(190/2),int(0.5*255),int(0.1*255)]), #min hsv blue 228 60 20
             np.array([int(240/2),int(8*255),int(0.5*255)]), #max hsv blue
         )
-        first_row = max(np.where(mask == 255)[0])
-        frame[:first_row+1] = (0,0,0) #same size image
+        temp_bl = np.where(mask == 255) #tuple of row col lists
+        if temp_bl == []:
+            blue_locs = [(0,0)] #default, would clear top left corner if no blue detected
+        else:
+            blue_locs = sorted(list(zip(temp_bl[0],temp_bl[1])), key=lambda x:(x[1],x[0])) #sorted locs by col, then row
+        col = 0
+        #finds maximum blue row valuesassociated to each col, then clears image above that row
+        for i in range(len(blue_locs)):
+            if i == len(blue_locs) - 1 or blue_locs[i+1][1] != col: #found transition
+                frame[:blue_locs[i][0],col] = (0,0,0)
+                col += 1
 
         # frame = cv2.medianBlur(frame, 51)
         
