@@ -20,7 +20,25 @@ class CubeDetectNode(Node):
         
     def image_callback(self, msg: CompressedImage):
         frame = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
-        
+        #preprocess to get rid of pixels above blue line
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange( #output b and w mask where white pixels are in range
+            hsv,
+            np.array([int(190/2),int(0.5*255),int(0.1*255)]), #min hsv blue 228 60 20
+            np.array([int(240/2),int(8*255),int(0.5*255)]), #max hsv blue
+        )
+        temp_bl = np.where(mask == 255) #tuple of row col lists
+        if temp_bl == []:
+            blue_locs = [(0,0)] #default, would clear top left corner if no blue detected
+        else:
+            blue_locs = sorted(list(zip(temp_bl[0],temp_bl[1])), key=lambda x:(x[1],x[0])) #sorted locs by col, then row
+        col = 0
+        #finds maximum blue row values associated to each col, then clears image above that row
+        for i in range(len(blue_locs)):
+            if i == len(blue_locs) - 1 or blue_locs[i+1][1] != col: #found transition
+                frame[:blue_locs[i][0],col] = (0,0,0)
+                col += 1
+
         frame = cv2.medianBlur(frame, 51)
         
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -59,7 +77,7 @@ class CubeDetectNode(Node):
             L = 2*25.4 #mm
             cube_dist = round(L*f*h_px/(h_mm*y_px)/10 - k,2) #cm
             cube_center_x = x + w//2
-        print(x,w)
+        # print(f'cube_center_x: {cube_center_x}')
 
 
         # cube_maskBW_msg = self.bridge.cv2_to_compressed_imgmsg(mask) #-> compress for transport

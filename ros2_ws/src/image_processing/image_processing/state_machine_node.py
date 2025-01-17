@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.clock import Clock
 from icm42688 import ICM42688
+import math
 import board
 import busio
 from image_processing_interfaces.msg import CubeTracking
@@ -31,6 +32,7 @@ class StateMachineNode(Node):
         self.current_angle = 0.0
         self.imu_angle_start = None
         self.spin_speed = 30 #30 is placeholder 
+        self.scan_timer = self.clock.now()
 
 
 
@@ -62,44 +64,50 @@ class StateMachineNode(Node):
         
         if self.scan_360_active:
             # print("scan active")
-            #read imu angle
-            # imu_angle = self.get_current_imu_angle() 
-            # if self.imu_angle_start is not None:
-            #     self.current_angle = (imu_angle - self.imu_angle_start) % 360
+            self.current_angle += self.get_delta_imu_angle(dT)
 
             # #if object is detected at center
-            if msg.x_center == 340:
-                self.current_angle += self.get_delta_imu_angle()
+            if abs(msg.x_center - 320) <= 40:
+                # self.scan_360_active = False
+                # dc.left_speed = 0
+                # dc.right_speed = 0
                 self.prev_time = self.clock.now()
-                cube_angle = self.current_angle
+                cube_angle = self.current_angle 
                 cube_distance = msg.distance
                 self.detected_objects.append((cube_angle, cube_distance))
-                print(f'object detected at {cube_angle} a distance of {cube_distance} away.')
+                print(f'\n\n\n\n object detected at {cube_angle} a distance of {cube_distance} away.')
 
-                
-                
-            
-            # #if scan is complete
-            if self.current_angle >= 350:
-                self.scan_360_active = False
-                closest_object = self.handle_scan_results()
-                print(f'scan complete is {self.scan_360_active} and the closest object is {closest_object[1]} away at an angle of {closest_object[0]}')
-                angle_diff = (self.current_angle - closest_object[0]) % 360
+            # print(self.current_angle)
 
-                while angle_diff > 5: #placeholder
-                    dc.left_speed = -self.spin_speed
-                    dc.right_speed = self.spin_speed
-                    self.current_angle += self.get_delta_imu_angle()
-                    angle_diff = (self.current_angle - closest_object[0]) % 360
-
-                self.block_align = True
-
-
-
+            # accel, gyro = self.imu.get_data()
+            # rotation_z = gyro[2]
+            # scan_time = 2*math.pi/rotation_z
             #robot spins
             dc.left_speed = -self.spin_speed
             dc.right_speed = self.spin_speed
-            # print(msg.x_center)
+                
+            
+            # #if scan is complete
+            if (self.clock.now() - self.scan_timer).nanoseconds/1e9 > 2.6:
+                self.scan_360_active = False
+                dc.left_speed = 0
+                dc.right_speed = 0
+                closest_object = self.handle_scan_results()
+                print(f'\n\n scan complete is {self.scan_360_active} and the closest object is {closest_object[1]} away at an angle of {closest_object[0]}')
+                angle_diff = (self.current_angle - closest_object[0]) % 360
+                print(f'\n\n detected_objects: {self.detected_objects} \n\n\n\n') 
+
+                # while angle_diff > 5: #placeholder
+                #     dc.left_speed = -self.spin_speed
+                #     dc.right_speed = self.spin_speed
+                #     self.current_angle += self.get_delta_imu_angle()
+                #     angle_diff = (self.current_angle - closest_object[0]) % 360
+
+                # self.block_align = True
+
+
+
+            # print(f'msg.x_center:{msg.x_center}')
             # print(f'left: {dc.left_speed}, right:{dc.right_speed}')
             
 
@@ -156,13 +164,11 @@ class StateMachineNode(Node):
     #def activate_elevator
 
 
-    def get_delta_imu_angle(self):
-        cur_time = self.clock.now()
-        dT = (cur_time - self.prev_time).nanoseconds/1e9
+    def get_delta_imu_angle(self, time):
         accel, gyro = self.imu.get_data()
         rotation_z = gyro[2]
-        imu_angle_read = rotation_z * dT
-        return imu_angle_read
+        imu_angle_read = rotation_z * time
+        return imu_angle_read*(180/math.pi)
     
 
         
