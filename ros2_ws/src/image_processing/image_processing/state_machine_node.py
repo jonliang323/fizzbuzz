@@ -85,7 +85,7 @@ class StateMachineNode(Node):
         if self.drive_condition(msg):
             norm_speed = self.NORM_SPEED
 
-        # PID alignment, while still or driving; cube to align to depends on msg.center_x
+        # PID alignment, while still or driving; cube to align to should depend on recorded angle
         if self.block_align:
             #no see block, drive straight
             if msg.center_x is not None:
@@ -107,8 +107,7 @@ class StateMachineNode(Node):
                 self.prev_align_error = cur_align_error
         
         motor_msg = MotorCommand()
-        dc = motor_msg.drive_motors
-        dc.left_speed = norm_speed + deltaL
+        motor_msg.left_speed = norm_speed + deltaL
         motor_msg.right_speed = norm_speed + deltaR
 
         self.prev_time = self.clock.now() #in case state_machine takes a bit to run

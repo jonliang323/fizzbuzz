@@ -13,7 +13,7 @@ class PicNode(Node):
         self.bridge = CvBridge()
         self.clock = Clock()
         self.prev_time = self.clock.now()
-        self.count = 0
+        self.count = 29
         self.pic_sub = self.create_subscription(CompressedImage, "image_raw/compressed", self.pic_callback, 10)
         
     def pic_callback(self, msg: CompressedImage):
@@ -37,6 +37,7 @@ class PicNode(Node):
                 if i == len(blue_locs) - 1 or blue_locs[i+1][1] != col: #found transition
                     frame[:blue_locs[i][0],col] = (0,0,0)
                     col += 1
+            frame = cv2.GaussianBlur(frame, (5,5),0)
             print(f"{cv2.imwrite(f"./pics/{self.count}.jpg", frame)} {self.count}")
             self.count += 1
             self.prev_time = self.clock.now()
