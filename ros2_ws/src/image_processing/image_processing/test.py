@@ -22,6 +22,7 @@ import os
 # except Exception as e:
 #     print(f"An error occurred: {e}")
 
+#functionality dos
 try:
     # List all files in the folder
     folder_path = './pics'
@@ -29,32 +30,41 @@ try:
 
     # Loop through the files
     for i, file_name in enumerate(files):
-        if np.random() > 0.6: #brightness or spatial augmentation with 40% chance
+        if np.random.rand() > 0.6: #brightness or spatial augmentation with 40% chance
             full_path = os.path.join(folder_path, file_name)
             img = cv2.imread(full_path)
-            alpha = np.random()
+            a = np.random.rand()
             #3 possibile transformations
-            if alpha > 0.66:
-                sign = (int(100*alpha)-66-33)//33
-                img = cv2.convertScaleAbs(img, alpha=1, beta=sign*20)
-            elif alpha > 0.33:
-                factor = (int(100*alpha)-33)/33 #decrease contrast
+            if a > 0.66:
+                factor = np.random.rand()*2-1 #brightness
+                img = cv2.convertScaleAbs(img, alpha=1, beta=factor*20)
+            elif a > 0.33:
+                factor = np.random.rand()+0.5 #contrast
                 img = cv2.convertScaleAbs(img, alpha=factor, beta=0)
             else:
-                size = int((int(100*alpha)/33)*10)*2+1 #odd kernel
+                size = np.random.randint(5,16)*2+1 #odd kernel, 11 to 31
                 img = cv2.GaussianBlur(img, (size,size), 0)
             
-            #4 possibile transformations, ran independently
-            if alpha > 0.66:
-                sign = (int(100*alpha)-66-33)//33
-                img = cv2.convertScaleAbs(img, alpha=1, beta=sign*20)
-            elif alpha > 0.33:
-                factor = (int(100*alpha)-33)/33 #decrease contrast
-                img = cv2.convertScaleAbs(img, alpha=factor, beta=0)
-            else:
-                size = int((int(100*alpha)/33)*10)*2+1 #odd kernel
-                img = cv2.GaussianBlur(img, (size,size), 0)
-        
+#             #4 possibile transformations, ran independently
+#             if a > 0.75:
+#                 img = cv2.flip(img, 1)
+#             elif a > 0.5:
+#                 crop_x = np.random.randint(200, 641)
+#                 crop_y = np.random.randint(200, 481)
+#                 x = np.random.randint(0,640 - crop_x + 1)
+#                 y = np.random.randint(0,480 - crop_y + 1)
+#                 img = img[y:y+crop_y,x:x+crop_x]
+#                 img = cv2.resize(img,(640,480))
+#             elif a > 0.25:
+#                 #center = (320, 240)
+#                 angle = np.random.randint(-15,15)
+#                 rot_matrix = cv2.getRotationMatrix2D((320,240),angle,scale=1)
+#                 img = cv2.warpAffine(img,rot_matrix,(640,480))
+#             else:
+#                 (shift_x, shift_y) = np.random.randint(50,201,size=2)*np.random.choice([-1,1],size=2)
+#                 t_matrix = np.float32([[1,0,shift_x],[0,1,shift_y]])
+#                 img = cv2.warpAffine(img, t_matrix, (640,480))
+            cv2.imwrite(f'{folder_path}/{file_name}a.jpg', img)
 
 except Exception as e:
     print(f"An error occurred: {e}")
