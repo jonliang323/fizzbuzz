@@ -4,7 +4,7 @@ import os
 
 try:
     # List all files in the folder
-    folder_path = './labels'
+    folder_path = './pics'
     files = os.listdir(folder_path)
 
     # Loop through the files
