@@ -114,9 +114,7 @@ class StateMachineNode(Node):
                 angle_diff = (self.current_angle - closest_object[0]) % 360
                 print(f'\n\n detected_objects: {self.detected_objects} \n\n\n\n') 
 
-
                 # self.block_align = True
-
 
             #robot spins
             dc.left_speed = -self.spin_speed
@@ -124,15 +122,6 @@ class StateMachineNode(Node):
                 
             # print(f'msg.x_center:{msg.x_center}')
             # print(f'left: {dc.left_speed}, right:{dc.right_speed}')
-            
-
-
-        #Drive until condition is met
-        if self.drive_condition(msg.distance):
-            norm_speed = self.NORM_SPEED
-        else: #stop
-            norm_speed = 0
-            self.block_intake = True
 
         # PID alignment, while still or driving; cube to align to should depend on recorded angle
         if self.block_align:
@@ -158,6 +147,12 @@ class StateMachineNode(Node):
         dc.left_speed = norm_speed + deltaL
         dc.right_speed = norm_speed + deltaR
 
+        #Drive until condition is met
+        if self.drive_condition(msg.distance):
+            norm_speed = self.NORM_SPEED
+        else: #stop
+            norm_speed = 0
+            self.block_intake = True
 
         if self.block_intake:
             if block == green or self.first_sphere_grabbed == False:

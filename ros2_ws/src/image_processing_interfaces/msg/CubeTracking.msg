@@ -1,2 +1,2 @@
-int16 x_center
-float32 distance
+int16[] x_center
+float32[] distance
