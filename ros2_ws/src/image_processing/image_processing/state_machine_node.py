@@ -3,6 +3,7 @@ from rclpy.node import Node
 from rclpy.clock import Clock
 from icm42688 import ICM42688
 import math
+import time
 import board
 import busio
 from image_processing_interfaces.msg import CubeTracking
@@ -33,6 +34,11 @@ class StateMachineNode(Node):
         self.imu_angle_start = None
         self.spin_speed = 30 #30 is placeholder 
         self.scan_timer = self.clock.now()
+
+        #elevator variables
+        self.block_intake = False
+        self.sphere_counter = 0
+        self.red_counter = 0
 
 
 
@@ -82,10 +88,7 @@ class StateMachineNode(Node):
             # accel, gyro = self.imu.get_data()
             # rotation_z = gyro[2]
             # scan_time = 2*math.pi/rotation_z
-            #robot spins
-            dc.left_speed = -self.spin_speed
-            dc.right_speed = self.spin_speed
-                
+        
             
             # #if scan is complete
             if (self.clock.now() - self.scan_timer).nanoseconds/1e9 > 2.6:
@@ -97,16 +100,20 @@ class StateMachineNode(Node):
                 angle_diff = (self.current_angle - closest_object[0]) % 360
                 print(f'\n\n detected_objects: {self.detected_objects} \n\n\n\n') 
 
-                # while angle_diff > 5: #placeholder
-                #     dc.left_speed = -self.spin_speed
-                #     dc.right_speed = self.spin_speed
-                #     self.current_angle += self.get_delta_imu_angle()
-                #     angle_diff = (self.current_angle - closest_object[0]) % 360
+                while angle_diff > 5: #placeholder
+                    print("turning to closest object")
+                    dc.left_speed = -self.spin_speed
+                    dc.right_speed = self.spin_speed
+                    self.current_angle += self.get_delta_imu_angle()
+                    angle_diff = (self.current_angle - closest_object[0]) % 360
 
                 # self.block_align = True
 
 
-
+            #robot spins
+            dc.left_speed = -self.spin_speed
+            dc.right_speed = self.spin_speed
+                
             # print(f'msg.x_center:{msg.x_center}')
             # print(f'left: {dc.left_speed}, right:{dc.right_speed}')
             
@@ -115,6 +122,9 @@ class StateMachineNode(Node):
         #Drive until condition is met
         if self.drive_condition(msg.distance):
             norm_speed = self.NORM_SPEED
+        else: #stop
+            norm_speed = 0
+            self.block_intake = True
 
         # PID alignment, while still or driving; cube to align to depends on msg.center_x
         if self.block_align:
@@ -137,13 +147,26 @@ class StateMachineNode(Node):
 
                 self.prev_align_error = cur_align_error
         
-        # dc.left_speed = norm_speed + deltaL
-        # dc.right_speed = norm_speed + deltaR
-        # dc.left_speed = self.NORM_SPEED + deltaL
-        # dc.right_speed = self.NORM_SPEED + deltaR
+        dc.left_speed = norm_speed + deltaL
+        dc.right_speed = norm_speed + deltaR
+
+
+        if self.block_intake:
+            if block == green or self.sphere_counter == 0:
+                self.activate_elevator(msg)
+                self.sphere_counter += 1
+            elif block == red:
+                self.activate_bird(msg)
+                self.red_counter += 1
+            else:
+                self.activate_bird()
+
+        if self.red_counter == 5:
+            self.activate_dumptruck()
 
         self.prev_time = self.clock.now() #in case state_machine takes a bit to run
         self.motor_pub.publish(motor_msg)
+    
 
     def start_360_scan(self):
         self.scan_360_active = True
@@ -161,7 +184,37 @@ class StateMachineNode(Node):
         return closest_object
         
 
-    #def activate_elevator
+    def activate_elevator(self):
+        #activate elevator when green block comes
+        motor_msg = MotorCommand()
+
+        motor_msg.actuate_motors.angle2 = -40 #claws open
+        time.sleep(2)
+
+        motor_msg.actuate_motors.angle1 = -90 #elevator down
+        motor_msg.actuate_motors.angle3 = 90 #flap closes
+        
+
+        #wait some time, 2 sec is placeholder, actually not sure if needed
+        time.sleep(2)
+
+        # Return elevator to starting positions, which will bring lock up.
+        motor_msg.actuate_motors.angle2 = -40 #claws close
+        time.sleep(2)
+
+        motor_msg.actuate_motors.angle1 = -90 #elevator up
+        motor_msg.actuate_motors.angle3 = 90 #flap opens, ready for next block to come
+
+    def activate_bird(self):
+        #activate bird when red block comes
+        motor_msg = MotorCommand()
+
+        motor_msg.actuate_motors.angle4 = -90 #idk what the bird angles are
+
+    def activate_dumptruck(self):
+        motor_msg = MotorCommand()
+        #some way to drive to purple wall
+        motor_msg.drive_motors.left_speed = 30 #change this, maybe add something in DCCommand.msg like dt_speed and set to 0 for everything except when dt is activated
 
 
     def get_delta_imu_angle(self, time):
