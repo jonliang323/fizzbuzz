@@ -5,6 +5,7 @@ from image_processing_interfaces.msg import CubeTracking
 import cv2
 from cv_bridge import CvBridge
 import numpy as np
+from ultralytics import YOLO
 
 class CubeDetectNode(Node):
 
@@ -20,7 +21,7 @@ class CubeDetectNode(Node):
         
     def image_callback(self, msg: CompressedImage):
         frame = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
-        #preprocess to get rid of pixels above blue ones
+        #preprocess to get rid of pixels above blue tape
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange( #output b and w mask where white pixels are in range
             hsv,
@@ -38,6 +39,14 @@ class CubeDetectNode(Node):
             if i == len(blue_locs) - 1 or blue_locs[i+1][1] != col: #found transition
                 frame[:blue_locs[i][0],col] = (0,0,0)
                 col += 1
+        ##
+        # Now, feed into model for classification and bounding box
+        ##
+        model = YOLO("image_processing/image_processing/yolo_weights/best.pt")
+
+        results = model(frame, conf=0.5, image_size=(480,640))
+
+        #cv2.rectangle(frame,(x,y),(x+w,y+h),(0,0,255),2) #output bounding box
 
         # frame = cv2.medianBlur(frame, 51)
         

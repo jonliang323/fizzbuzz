@@ -6,6 +6,8 @@ import cv2
 from cv_bridge import CvBridge
 import numpy as np
 
+#Node for taking, saving pictures
+
 class PicNode(Node):
 
     def __init__(self):

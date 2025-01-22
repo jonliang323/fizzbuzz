@@ -1,26 +1,26 @@
-import numpy as np
-import cv2
-import os
+# import numpy as np
+# import cv2
+# import os
 
-try:
-    # List all files in the folder
-    folder_path = './pics'
-    files = os.listdir(folder_path)
+# try:
+#     # List all files in the folder
+#     folder_path = './pics'
+#     files = os.listdir(folder_path)
 
-    # Loop through the files
-    for i, file_name in enumerate(files):
-        # Build the new file name
-        old_file_path = os.path.join(folder_path, file_name)
+#     # Loop through the files
+#     for i, file_name in enumerate(files):
+#         # Build the new file name
+#         old_file_path = os.path.join(folder_path, file_name)
 
-        # Create the new file name
-        new_file_name = f"{i}.png"
-        new_file_path = os.path.join(folder_path, new_file_name)
+#         # Create the new file name
+#         new_file_name = f"{i}.png"
+#         new_file_path = os.path.join(folder_path, new_file_name)
 
-        # Rename the file
-        os.rename(old_file_path, new_file_path)
+#         # Rename the file
+#         os.rename(old_file_path, new_file_path)
 
-except Exception as e:
-    print(f"An error occurred: {e}")
+# except Exception as e:
+#     print(f"An error occurred: {e}")
 
 #functionality dos
 # try:
@@ -69,3 +69,10 @@ except Exception as e:
 
 # except Exception as e:
 #     print(f"An error occurred: {e}")
+import numpy as np
+from ultralytics import YOLO
+model = YOLO("image_processing/image_processing/yolo_weights/best.pt")
+source = np.random.randint(low=0, high=255, size=(640, 640, 3), dtype="uint8")
+results = model(source, image_size=640)
+results[0].show()
+print(results[0].boxes[0].xyxy)
