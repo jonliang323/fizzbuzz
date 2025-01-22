@@ -39,6 +39,9 @@ class StateMachineNode(Node):
         self.block_intake = False
         self.sphere_counter = 0
         self.red_counter = 0
+        self.elevator_timer = self.create_timer(0.5, self.activate_elevator)
+        self.elevator_timer_counter = 0
+        self.elevator_state = 'idle'
 
 
 
@@ -153,10 +156,10 @@ class StateMachineNode(Node):
 
         if self.block_intake:
             if block == green or self.sphere_counter == 0:
-                self.activate_elevator(msg)
+                self.activate_elevator()
                 self.sphere_counter += 1
             elif block == red:
-                self.activate_bird(msg)
+                self.activate_bird()
                 self.red_counter += 1
             else:
                 self.activate_bird()
@@ -182,28 +185,53 @@ class StateMachineNode(Node):
                 min_distance = obj[1]
                 closest_object = obj
         return closest_object
-        
 
     def activate_elevator(self):
-        #activate elevator when green block comes
         motor_msg = MotorCommand()
 
-        motor_msg.actuate_motors.angle2 = -40 #claws open
-        time.sleep(2)
-
-        motor_msg.actuate_motors.angle1 = -90 #elevator down
-        motor_msg.actuate_motors.angle3 = 90 #flap closes
+        #elevator starts: angle1 = 90 (elevator up) angle2 = -25 (claws closed) angle3 = 0 (flap open)
+        self.elevator_state == 'open claws'
+        self.elevator_timer_count = 0
         
 
-        #wait some time, 2 sec is placeholder, actually not sure if needed
-        time.sleep(2)
+        if self.elevator_state == 'open claws':
+            motor_msg.actuate_motors.angle2 = -40  #claws open
+            self.elevator_timer_count += 1
 
-        # Return elevator to starting positions, which will bring lock up.
-        motor_msg.actuate_motors.angle2 = -40 #claws close
-        time.sleep(2)
+            if self.elevator_timer_count >= 4:  #wait 2 seconds
+                self.elevator_state = 'elev move down'
+                self.elevator_timer_count = 0
 
-        motor_msg.actuate_motors.angle1 = -90 #elevator up
-        motor_msg.actuate_motors.angle3 = 90 #flap opens, ready for next block to come
+        elif self.elevator_state == 'elev move down':
+            motor_msg.actuate_motors.angle1 = -90  #elevator moves down
+            motor_msg.actuate_motors.angle3 = 90   #flap closes
+
+            self.elevator_timer_count += 1
+            if self.elevator_timer_count >= 4:  
+                self.elevator_state = 'close claws'
+                self.elevator_timer_count = 0
+
+        #return elevator to starting position
+        elif self.elevator_state == 'close claws':
+            motor_msg.actuate_motors.angle2 = -25  #claws close
+            self.elevator_timer_count += 1
+            if self.elevator_timer_count >= 4:  
+                self.elevator_state = 'elev move up'
+                self.elevator_timer_count = 0
+
+        elif self.elevator_state == 'elev move up':
+            motor_msg.actuate_motors.angle1 = -90  #elevator moves up while holding block
+            motor_msg.actuate_motors.angle3 = 90   #flap opens, ready for next block
+            self.elevator_timer_count += 1
+
+            if self.elevator_timer_count >= 4:  
+                self.elevator_state = 'idle'
+                self.elevator_timer_count = 0
+
+
+        # Publish motor command
+        self.elevator_pub.publish(motor_msg)
+        
 
     def activate_bird(self):
         #activate bird when red block comes
