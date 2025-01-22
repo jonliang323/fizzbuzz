@@ -37,7 +37,7 @@ class StateMachineNode(Node):
 
         #elevator variables
         self.block_intake = False
-        self.sphere_counter = 0
+        self.first_sphere_grabbed = False
         self.red_counter = 0
         self.elevator_timer = self.create_timer(0.5, self.activate_elevator)
         self.elevator_timer_counter = 0
@@ -103,12 +103,6 @@ class StateMachineNode(Node):
                 angle_diff = (self.current_angle - closest_object[0]) % 360
                 print(f'\n\n detected_objects: {self.detected_objects} \n\n\n\n') 
 
-                while angle_diff > 5: #placeholder
-                    print("turning to closest object")
-                    dc.left_speed = -self.spin_speed
-                    dc.right_speed = self.spin_speed
-                    self.current_angle += self.get_delta_imu_angle()
-                    angle_diff = (self.current_angle - closest_object[0]) % 360
 
                 # self.block_align = True
 
@@ -155,9 +149,9 @@ class StateMachineNode(Node):
 
 
         if self.block_intake:
-            if block == green or self.sphere_counter == 0:
+            if block == green or self.first_sphere_grabbed == False:
                 self.activate_elevator()
-                self.sphere_counter += 1
+                self.first_sphere_grabbed = True
             elif block == red:
                 self.activate_bird()
                 self.red_counter += 1
