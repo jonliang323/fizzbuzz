@@ -23,7 +23,7 @@ class RavenNode(Node):
 
         # Set motors to DIRECT
         self.raven_board.set_motor_mode(Raven.MotorChannel.CH1, Raven.MotorMode.DIRECT)
-        self.raven_board.set_motor_mode(Raven.MotorChannel.CH3, Raven.MotorMode.DIRECT)
+        self.raven_board.set_motor_mode(Raven.MotorChannel.CH2, Raven.MotorMode.DIRECT)
 
         self.motor_sub = self.create_subscription(MotorCommand, "motor_command", self.raven_callback, 10)
         #self.imu_pub = self.create_publisher(IMUInfo, "imu_info", 10)
@@ -31,14 +31,32 @@ class RavenNode(Node):
     def raven_callback(self, msg: MotorCommand):
         dc = msg.drive_motors
         servo = msg.actuate_motors
+        rev = False
+        if dc.left_speed < 0:
+            left_speed = abs(dc.left_speed)
+            left_rev = True
+        else:
+            left_speed = dc.left_speed
+            left_rev = False
+        
+        if dc.right_speed < 0:
+            right_speed = abs(dc.right_speed)
+            right_rev=True
+        else:
+            right_speed = dc.right_speed
+            right_rev=False
+
+        # print(f"Left Motor - Speed: {left_speed}, Reverse: {left_rev}")
+        # print(f"Right Motor - Speed: {right_speed}, Reverse: {right_rev}")
+
 
         #print('in the callback')
         # Speed controlled:
         self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH1, 100) # Let the motor use all the torque to get to speed factor
-        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, dc.left_speed)
+        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, left_speed, reverse=left_rev)
         
-        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH3, 100)
-        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH3, dc.right_speed)
+        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH2, 100)
+        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, right_speed, reverse=right_rev)
 
         # Torque controlled:
         # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, 100) # Make motor try to run at max speed forward
@@ -46,7 +64,8 @@ class RavenNode(Node):
 
         # Set the servo 1 to x degrees with custom pulse microseconds
         # self.raven_board.set_servo_position(Raven.ServoChannel.CH1, servo.angle, servo.min_us, servo.max_us)
-        self.raven_board.set_servo_position(Raven.ServoChannel.CH1, servo.angle, 500, 2500)
+        self.raven_board.set_servo_position(Raven.ServoChannel.CH1, servo.angle1, 500, 2500)
+        self.raven_board.set_servo_position(Raven.ServoChannel.CH2, servo.angle2, 500, 2500)
 
         #send imu info on refresh
         #imu_msg = IMUInfo()
@@ -64,6 +83,12 @@ def main(args=None):
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
+
+def destroy_node(self):
+    # Stop the motors before shutting down
+    self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, 0, reverse=False)
+    self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, 0, reverse=False)
+    super().destroy_node()  # Call the parent class destroy_node
 
 
 if __name__ == "__main__":

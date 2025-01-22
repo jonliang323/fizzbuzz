@@ -1,3 +1,2 @@
-int8 angle
-int8 min_us
-int8 max_us
+int8 angle1
+int8 angle2

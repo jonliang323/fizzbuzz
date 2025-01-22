@@ -18,6 +18,7 @@ class CubeDetectNode(Node):
         
     def image_callback(self, msg: CompressedImage):
         frame = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
+        
         #preprocess to get rid of pixels above blue tape
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange( #output b and w mask where white pixels are in range
@@ -59,7 +60,9 @@ class CubeDetectNode(Node):
             k = 1 #linear offset
             L = 2*25.4 #mm size of cube
             cube_dist = round(L*f*h_px/(h_mm*y_px)/10 - k,2) #cm
+
         print(cube_dist, cube_x_center)
+
 
         cube_info_msg = CubeTracking()
         cube_info_msg.x_center = int(cube_x_center)

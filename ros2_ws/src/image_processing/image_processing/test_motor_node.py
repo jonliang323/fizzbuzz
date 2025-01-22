@@ -30,11 +30,11 @@ class TestMotorNode(Node): #replaces state machine, which may be complicated to 
             self.i = (self.i + 1)%2
             self.prev_time = self.clock.now()
         if self.i == 0:
-            motor_msg.actuate_motors.angle = -90
+            motor_msg.actuate_motors.angle1 = -90
+            motor_msg.actuate_motors.angle2 = -40
         else:
-            motor_msg.actuate_motors.angle = 90
-        motor_msg.actuate_motors.min_us = 500
-        motor_msg.actuate_motors.max_us = 2500
+            motor_msg.actuate_motors.angle1 = 90
+            motor_msg.actuate_motors.angle2 = -25
 
         self.motor_pub.publish(motor_msg)
     

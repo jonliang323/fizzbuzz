@@ -2,6 +2,8 @@ import rclpy
 from rclpy.node import Node
 from rclpy.clock import Clock
 from icm42688 import ICM42688
+import math
+import time
 import board
 import busio
 from image_processing_interfaces.msg import CubeTracking
@@ -30,7 +32,18 @@ class StateMachineNode(Node):
         self.detected_objects = []
         self.current_angle = 0.0
         self.imu_angle_start = None
-        self.spin_speed = 30 #30 is placeholder
+        self.spin_speed = 30 #30 is placeholder 
+        self.scan_timer = self.clock.now()
+
+        #elevator variables
+        self.block_intake = False
+        self.first_sphere_grabbed = False
+        self.red_counter = 0
+        self.elevator_timer = self.create_timer(0.5, self.activate_elevator)
+        self.elevator_timer_counter = 0
+        self.elevator_state = 'idle'
+
+
 
 
         self.state_machine_sub = self.create_subscription(CubeTracking, "cube_location_info", self.state_machine_callback, 10)
@@ -48,48 +61,73 @@ class StateMachineNode(Node):
         self.imu = ICM42688(spi)
         self.imu.begin()
 
+        self.start_360_scan()
+
 
     def state_machine_callback(self, msg: CubeTracking):
         dT = (self.clock.now() - self.prev_time).nanoseconds/1e9
         deltaL, deltaR = 0,0
         norm_speed = 0 #no decel
+        motor_msg = MotorCommand()
+        dc = motor_msg.drive_motors
         
         if self.scan_360_active:
-            #read imu angle
-            imu_angle = self.get_current_imu_angle() 
-            # if self.imu_angle_start is not None:
-            #     self.current_angle = (imu_angle - self.imu_angle_start) % 360
+            # print("scan active")
+            self.current_angle += self.get_delta_imu_angle(dT)
 
-            #if object is detected at center
-            if msg.center_x == 340:
-                cube_angle = self.current_angle
+            # #if object is detected at center
+            if abs(msg.x_center - 320) <= 40:
+                # self.scan_360_active = False
+                # dc.left_speed = 0
+                # dc.right_speed = 0
+                self.prev_time = self.clock.now()
+                cube_angle = self.current_angle 
                 cube_distance = msg.distance
                 self.detected_objects.append((cube_angle, cube_distance))
-                
-                
+                print(f'\n\n\n\n object detected at {cube_angle} a distance of {cube_distance} away.')
+
+            # print(self.current_angle)
+
+            # accel, gyro = self.imu.get_data()
+            # rotation_z = gyro[2]
+            # scan_time = 2*math.pi/rotation_z
+        
             
-            #if scan is complete
-            if self.current_angle >= 360:
+            # #if scan is complete
+            if (self.clock.now() - self.scan_timer).nanoseconds/1e9 > 2.6:
                 self.scan_360_active = False
-                self.handle_scan_results()
-                self.block_align = True
+                dc.left_speed = 0
+                dc.right_speed = 0
+                closest_object = self.handle_scan_results()
+                print(f'\n\n scan complete is {self.scan_360_active} and the closest object is {closest_object[1]} away at an angle of {closest_object[0]}')
+                angle_diff = (self.current_angle - closest_object[0]) % 360
+                print(f'\n\n detected_objects: {self.detected_objects} \n\n\n\n') 
+
+
+                # self.block_align = True
+
 
             #robot spins
-            motor_msg = MotorCommand()
-            motor_msg.left_speed = -self.spin_speed
-            motor_msg.right_speed = self.spin_speed
-            self.motor_pub.publish(motor_msg)
+            dc.left_speed = -self.spin_speed
+            dc.right_speed = self.spin_speed
+                
+            # print(f'msg.x_center:{msg.x_center}')
+            # print(f'left: {dc.left_speed}, right:{dc.right_speed}')
+            
 
 
         #Drive until condition is met
-        if self.drive_condition(msg):
+        if self.drive_condition(msg.distance):
             norm_speed = self.NORM_SPEED
+        else: #stop
+            norm_speed = 0
+            self.block_intake = True
 
         # PID alignment, while still or driving; cube to align to should depend on recorded angle
         if self.block_align:
             #no see block, drive straight
-            if msg.center_x is not None:
-                cur_align_error = self.FOV_XY[0]//2 - msg.center_x
+            if msg.x_center is not None:
+                cur_align_error = self.FOV_XY[0]//2 - msg.x_center
                 #capped integral terms
                 self.error_integralL = min(self.error_integralL + cur_align_error*dT, self.MAX_DELTA/self.i_gainL)
                 self.error_integralR = min(self.error_integralR + cur_align_error*dT, self.MAX_DELTA/self.i_gainR)
@@ -106,42 +144,113 @@ class StateMachineNode(Node):
 
                 self.prev_align_error = cur_align_error
         
-        motor_msg = MotorCommand()
-        motor_msg.left_speed = norm_speed + deltaL
-        motor_msg.right_speed = norm_speed + deltaR
+        dc.left_speed = norm_speed + deltaL
+        dc.right_speed = norm_speed + deltaR
+
+
+        if self.block_intake:
+            if block == green or self.first_sphere_grabbed == False:
+                self.activate_elevator()
+                self.first_sphere_grabbed = True
+            elif block == red:
+                self.activate_bird()
+                self.red_counter += 1
+            else:
+                self.activate_bird()
+
+        if self.red_counter == 5:
+            self.activate_dumptruck()
 
         self.prev_time = self.clock.now() #in case state_machine takes a bit to run
         self.motor_pub.publish(motor_msg)
+    
 
     def start_360_scan(self):
         self.scan_360_active = True
         self.detected_objects = []
-        self.imu_angle_start = self.get_current_imu_angle()
         self.current_angle = 0.0
     
     def handle_scan_results(self):
         #find closest object
         closest_object = None
         min_distance = float('inf')
-        for obj in self.detected_objects:
-            if obj[1] < min_distance:  # Compare the distance
+        for obj in self.detected_objects: #detected_objects is [angle, distance]
+            if obj[1] < min_distance:  
                 min_distance = obj[1]
                 closest_object = obj
-        #put closest object into pid somehow
+        return closest_object
+
+    def activate_elevator(self):
+        motor_msg = MotorCommand()
+
+        #elevator starts: angle1 = 90 (elevator up) angle2 = -25 (claws closed) angle3 = 0 (flap open)
+        self.elevator_state == 'open claws'
+        self.elevator_timer_count = 0
+        
+
+        if self.elevator_state == 'open claws':
+            motor_msg.actuate_motors.angle2 = -40  #claws open
+            self.elevator_timer_count += 1
+
+            if self.elevator_timer_count >= 4:  #wait 2 seconds
+                self.elevator_state = 'elev move down'
+                self.elevator_timer_count = 0
+
+        elif self.elevator_state == 'elev move down':
+            motor_msg.actuate_motors.angle1 = -90  #elevator moves down
+            motor_msg.actuate_motors.angle3 = 90   #flap closes
+
+            self.elevator_timer_count += 1
+            if self.elevator_timer_count >= 4:  
+                self.elevator_state = 'close claws'
+                self.elevator_timer_count = 0
+
+        #return elevator to starting position
+        elif self.elevator_state == 'close claws':
+            motor_msg.actuate_motors.angle2 = -25  #claws close
+            self.elevator_timer_count += 1
+            if self.elevator_timer_count >= 4:  
+                self.elevator_state = 'elev move up'
+                self.elevator_timer_count = 0
+
+        elif self.elevator_state == 'elev move up':
+            motor_msg.actuate_motors.angle1 = -90  #elevator moves up while holding block
+            motor_msg.actuate_motors.angle3 = 90   #flap opens, ready for next block
+            self.elevator_timer_count += 1
+
+            if self.elevator_timer_count >= 4:  
+                self.elevator_state = 'idle'
+                self.elevator_timer_count = 0
 
 
-    def get_current_imu_angle(self):
-        cur_time = self.clock.now()
-        dT = (cur_time - self.prev_time).nanoseconds/1e9
+        # Publish motor command
+        self.elevator_pub.publish(motor_msg)
+        
+
+    def activate_bird(self):
+        #activate bird when red block comes
+        motor_msg = MotorCommand()
+
+        motor_msg.actuate_motors.angle4 = -90 #idk what the bird angles are
+
+    def activate_dumptruck(self):
+        motor_msg = MotorCommand()
+        #some way to drive to purple wall
+        motor_msg.drive_motors.left_speed = 30 #change this, maybe add something in DCCommand.msg like dt_speed and set to 0 for everything except when dt is activated
+
+
+    def get_delta_imu_angle(self, time):
         accel, gyro = self.imu.get_data()
         rotation_z = gyro[2]
-        imu_angle_read = rotation_z * dT
-        return imu_angle_read
+        imu_angle_read = rotation_z * time
+        return imu_angle_read*(180/math.pi)
+    
 
         
     def drive_condition(self, cube_dist):
         #can be more complex
         return cube_dist > 2
+    
 
 def main(args=None):
     rclpy.init()
