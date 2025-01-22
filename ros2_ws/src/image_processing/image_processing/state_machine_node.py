@@ -34,6 +34,8 @@ class StateMachineNode(Node):
         self.imu_angle_start = None
         self.spin_speed = 30 #30 is placeholder 
         self.scan_timer = self.clock.now()
+        self.scan_timer2 = self.create_timer(0.5, self.state_machine_callback)
+        self.scan_timer2_count = 0
 
         #elevator variables
         self.block_intake = False
@@ -76,30 +78,36 @@ class StateMachineNode(Node):
             self.current_angle += self.get_delta_imu_angle(dT)
 
             # #if object is detected at center
-            if abs(msg.x_center - 320) <= 40:
-                # self.scan_360_active = False
-                # dc.left_speed = 0
-                # dc.right_speed = 0
-                self.prev_time = self.clock.now()
-                cube_angle = self.current_angle 
-                cube_distance = msg.distance
-                self.detected_objects.append((cube_angle, cube_distance))
-                print(f'\n\n\n\n object detected at {cube_angle} a distance of {cube_distance} away.')
+            # if abs(msg.x_center - 320) <= 40:
+            #     # self.scan_360_active = False
+            #     # dc.left_speed = 0
+            #     # dc.right_speed = 0
+            #     self.prev_time = self.clock.now()
+            #     cube_angle = self.current_angle 
+            #     cube_distance = msg.distance
+            #     self.detected_objects.append((cube_angle, cube_distance))
+            #     print(f'\n\n\n\n object detected at {cube_angle} a distance of {cube_distance} away.')
 
-            #find the closest object in the current FOV
-            closest_object = self.handle_scan_results(msg.list_of_x_centers)
+            # #turn for x amount of time
+            # turn_time = 0.5
 
-            #turn for x amount of time
-            turn_duration = 0.5
-            while (self.clock.now() - self.scan_timer).nanoseconds/1e9 < turn_duration:
+
+            while (self.clock.now() - self.scan_timer).nanoseconds/1e9 < 4:
                 dc.left_speed = -self.spin_speed
                 dc.right_speed = self.spin_speed
-                self.motor_pub.publish(motor_msg)
-                rclpy.spin_once(self, timeout_sec=0.1)
+                self.scan_timer2_count += 1
+                if self.scan_timer2_count >= 1:
+                    dc.left_speed = dc.reft_speed = 0
+                    self.handle_scan_results(msg.x_center)
+                    time.sleep(0.1)
+                    self.scan_timer2_count = 0
+                
 
-            #scan for the closest object in the new field of vision
-            self.current_angle += self.get_delta_imu_angle(turn_duration)
-            self.detected_objects.append((self.current_angle, closest_object.distance))
+
+
+            # #scan for the closest object in the new field of vision
+            # self.current_angle += self.get_delta_imu_angle(turn_duration)
+            # self.detected_objects.append((self.current_angle, closest_object.distance))
 
             # print(self.current_angle)
         
@@ -116,9 +124,9 @@ class StateMachineNode(Node):
 
                 # self.block_align = True
 
-            #robot spins
-            dc.left_speed = -self.spin_speed
-            dc.right_speed = self.spin_speed
+            # #robot spins
+            # dc.left_speed = -self.spin_speed
+            # dc.right_speed = self.spin_speed
                 
             # print(f'msg.x_center:{msg.x_center}')
             # print(f'left: {dc.left_speed}, right:{dc.right_speed}')
