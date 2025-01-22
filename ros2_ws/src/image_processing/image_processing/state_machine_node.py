@@ -123,7 +123,7 @@ class StateMachineNode(Node):
             norm_speed = 0
             self.block_intake = True
 
-        # PID alignment, while still or driving; cube to align to depends on msg.center_x
+        # PID alignment, while still or driving; cube to align to should depend on recorded angle
         if self.block_align:
             #no see block, drive straight
             if msg.x_center is not None:
