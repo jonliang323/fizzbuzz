@@ -14,10 +14,7 @@ class CubeDetectNode(Node):
         self.bridge = CvBridge()
         self.image_sub = self.create_subscription(CompressedImage, "image_raw/compressed", self.image_callback, 10)
 
-        #self.masked_frame_pub = self.create_publisher(CompressedImage, "masked_frame/compressed", 10)
-        self.cut_frame_pub = self.create_publisher(CompressedImage, "cut_frame/compressed", 10)
-        # self.cube_maskC_pub = self.create_publisher(CompressedImage, "cube_maskC/compressed", 10)
-        #self.location_pub = self.create_publisher(CubeTracking, "cube_location_info", 10)
+        self.location_pub = self.create_publisher(CubeTracking, "cube_location_info", 10)
         
     def image_callback(self, msg: CompressedImage):
         frame = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
@@ -43,65 +40,31 @@ class CubeDetectNode(Node):
         # Now, feed into model for classification and bounding box
         ##
         model = YOLO("image_processing/image_processing/yolo_weights/best.pt")
+        results = model(frame, imgsz=(480,640))
+        boxes = results[0].boxes #1 image processed
 
-        results = model(frame, conf=0.5, image_size=(480,640))
+        # distance to cube
+        if len(boxes) == 0:
+            cube_x_center = -1
+            cube_dist = -1.0
+        else:
+            coords = boxes.xyxy
+            obj_type = boxes.cls
+            cube_x_center = (coords[i][0] + coords[i][2])//2
 
-        #cv2.rectangle(frame,(x,y),(x+w,y+h),(0,0,255),2) #output bounding box
+            y_px = int(coords[i][1] - coords[i][3]) #from bounding box
+            h_px = frame.shape[0]
+            h_mm = 1 #mm, param, to adjust
+            f = 2 #mm, param, to adjust
+            k = 1 #linear offset
+            L = 2*25.4 #mm size of cube
+            cube_dist = round(L*f*h_px/(h_mm*y_px)/10 - k,2) #cm
+        print(cube_dist, cube_x_center)
 
-        # frame = cv2.medianBlur(frame, 51)
-        
-        # hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        # # create B and W mask with range
-        # mask = cv2.inRange( #output 1 b and w mask
-        #     hsv,
-        #     np.array([30,20,20]), #min hsv published ref ([70,50,50], [90,255,255])
-        #     np.array([80,255,255]), #max hsv
-        # )
-
-        # contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        # #frame_box = np.copy(frame)
-        # x,y,w,h = None,None,None,None
-        # if len(contours) != 0:
-        #     c = max(contours, key = cv2.contourArea)
-        #     x,y,w,h = cv2.boundingRect(c)
-        #     #cv2.rectangle(frame_box,(x,y),(x+w,y+h),(0,0,255),2) #output 2 bounding box
-        
-        
-        #output mask on image
-        # mask_3c = cv2.merge([mask,mask,mask])
-        # white_im = np.full_like(frame, (255,255,255))
-        # masked_frame = np.where(mask_3c == (255,255,255), white_im, frame)
-
-        # #output 4 print distance to cube
-        
-        # if x is None:
-        #     cube_center_x = -1
-        #     cube_dist = -1.0
-        # else:
-        #     y_px = h #from bounding box
-        #     h_px = frame.shape[0]
-        #     h_mm = 1 #mm, param, to adjust
-        #     f = 2 #mm, param, to adjust
-        #     k = 1 #linear offset
-        #     L = 2*25.4 #mm
-        #     cube_dist = round(L*f*h_px/(h_mm*y_px)/10 - k,2) #cm
-        #     cube_center_x = x + w//2
-        # print(cube_dist, cube_center_x)
-
-
-        # masked_frame_msg = self.bridge.cv2_to_compressed_imgmsg(masked_frame) #-> compress for transport
-        # self.masked_frame_pub.publish(masked_frame_msg)
-
-        cut_frame_msg = self.bridge.cv2_to_compressed_imgmsg(frame)
-        self.cut_frame_pub.publish(cut_frame_msg)
-
-        # # cube_maskC_msg = self.bridge.cv2_to_compressed_imgmsg(frame)
-        # # self.cube_maskC_pub.publish(cube_maskC_msg)
-
-        # cube_info_msg = CubeTracking()
-        # cube_info_msg.x_center = int(cube_center_x)
-        # cube_info_msg.distance = float(cube_dist)
-        # self.location_pub.publish(cube_info_msg)
+        cube_info_msg = CubeTracking()
+        cube_info_msg.x_center = int(cube_x_center)
+        cube_info_msg.distance = float(cube_dist)
+        self.location_pub.publish(cube_info_msg)
     
 def main(args=None):
     rclpy.init()

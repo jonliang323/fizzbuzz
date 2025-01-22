@@ -71,8 +71,8 @@
 #     print(f"An error occurred: {e}")
 import numpy as np
 from ultralytics import YOLO
-model = YOLO("image_processing/image_processing/yolo_weights/best.pt")
-source = np.random.randint(low=0, high=255, size=(640, 640, 3), dtype="uint8")
-results = model(source, image_size=640)
-results[0].show()
-print(results[0].boxes[0].xyxy)
+model = YOLO("ros2_ws/src/image_processing/image_processing/yolo_weights/best.pt")
+results = model("ros2_ws/src/image_processing/image_processing/test/3.jpg", imgsz=640)
+boxes = results[0].boxes
+
+# print(results[0].boxes[0].xyxy)
