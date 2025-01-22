@@ -18,6 +18,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   msg/MotorCommand.msg
   msg/DCCommand.msg
   msg/ServoCommand.msg
+  msg/EncoderCounts.msg
 ) 
 
 if(BUILD_TESTING)

@@ -4,6 +4,7 @@ from raven import Raven
 #from icm42688 import ICM42688
 #import board
 from image_processing_interfaces.msg import MotorCommand
+from image_processing_interfaces.msg import EncoderCounts
 #from image_processing_interfaces.msg import IMUInfo
 
 class RavenNode(Node):
@@ -24,9 +25,14 @@ class RavenNode(Node):
         # Set motors to DIRECT
         self.raven_board.set_motor_mode(Raven.MotorChannel.CH1, Raven.MotorMode.DIRECT)
         self.raven_board.set_motor_mode(Raven.MotorChannel.CH2, Raven.MotorMode.DIRECT)
+        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH1, 50) # Let the motor use 50% max torque to get to speed factor
+        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH2, 50)
+
+        self.raven_board.set_motor_encoder(Raven.MotorChannel.CH1, 0) # Set encoder count for motor 1 to zero
+        self.raven_board.set_motor_encoder(Raven.MotorChannel.CH2, 0) # Set encoder count for motor 1 to zero
 
         self.motor_sub = self.create_subscription(MotorCommand, "motor_command", self.raven_callback, 10)
-        #self.imu_pub = self.create_publisher(IMUInfo, "imu_info", 10)
+        self.encoder_pub = self.create_publisher(EncoderCounts, "encoder_info", 10)
 
     def raven_callback(self, msg: MotorCommand):
         dc = msg.drive_motors
@@ -49,13 +55,8 @@ class RavenNode(Node):
         # print(f"Left Motor - Speed: {left_speed}, Reverse: {left_rev}")
         # print(f"Right Motor - Speed: {right_speed}, Reverse: {right_rev}")
 
-
-        #print('in the callback')
         # Speed controlled:
-        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH1, 100) # Let the motor use all the torque to get to speed factor
         self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, left_speed, reverse=left_rev)
-        
-        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH2, 100)
         self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, right_speed, reverse=right_rev)
 
         # Torque controlled:
@@ -67,14 +68,10 @@ class RavenNode(Node):
         self.raven_board.set_servo_position(Raven.ServoChannel.CH1, servo.angle1, 500, 2500)
         self.raven_board.set_servo_position(Raven.ServoChannel.CH2, servo.angle2, 500, 2500)
 
-        #send imu info on refresh
-        #imu_msg = IMUInfo()
-        #accel, gyro = self.imu.get_data()
-        # Returned linear acceleration is a tuple of (X, Y, Z) m/s^2
-        # Returned gyroscope reading is a tuple of (X, Y, Z) radian/s
-        #imu_msg.accel = [accel[0],accel[1],accel[2]]
-        #imu_msg.gyro = [gyro[0],gyro[1],gyro[2]]
-        #self.imu_pub.publish(imu_msg)
+        encoder_msg = EncoderCounts()
+        encoder_msg.encoder1 = self.get_raven_board.motor_encoder(Raven.MotorChannel.CH1, 0)
+        encoder_msg.encoder2 = self.get_raven_board.motor_encoder(Raven.MotorChannel.CH2, 0)
+        self.encoder_pub.publish(encoder_msg)
 
 
 def main(args=None):

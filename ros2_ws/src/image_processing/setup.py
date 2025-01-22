@@ -24,8 +24,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'state_machine = image_processing.state_machine_node:main',
             'cube_detect_subscriber = image_processing.cube_detect_node:main',
-            'state_machine_subscriber = image_processing.state_machine_node:main',
             'raven_subscriber = image_processing.raven_node:main',
             'test_motor_subscriber = image_processing.test_motor_node:main',
             'pic_subscriber = image_processing.pic_node:main',

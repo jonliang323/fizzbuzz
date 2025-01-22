@@ -67,9 +67,9 @@ class CubeDetectNode(Node):
         print(f"{len(boxes)} objects detected on the screen")
 
         cube_info_msg = CubeTracking()
-        cube_info_msg.x_center = x_center_list
-        cube_info_msg.distance = distance_list
-        cube_info_msg.obj_type = obj_type_list
+        cube_info_msg.x_centers = x_center_list
+        cube_info_msg.distances = distance_list
+        cube_info_msg.obj_types = obj_type_list
         self.location_pub.publish(cube_info_msg)
     
 def main(args=None):
