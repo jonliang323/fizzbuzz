@@ -86,11 +86,22 @@ class StateMachineNode(Node):
                 self.detected_objects.append((cube_angle, cube_distance))
                 print(f'\n\n\n\n object detected at {cube_angle} a distance of {cube_distance} away.')
 
-            # print(self.current_angle)
+            #find the closest object in the current FOV
+            closest_object = self.handle_scan_results(msg.list_of_x_centers)
 
-            # accel, gyro = self.imu.get_data()
-            # rotation_z = gyro[2]
-            # scan_time = 2*math.pi/rotation_z
+            #turn for x amount of time
+            turn_duration = 0.5
+            while (self.clock.now() - self.scan_timer).nanoseconds/1e9 < turn_duration:
+                dc.left_speed = -self.spin_speed
+                dc.right_speed = self.spin_speed
+                self.motor_pub.publish(motor_msg)
+                rclpy.spin_once(self, timeout_sec=0.1)
+
+            #scan for the closest object in the new field of vision
+            self.current_angle += self.get_delta_imu_angle(turn_duration)
+            self.detected_objects.append((self.current_angle, closest_object.distance))
+
+            # print(self.current_angle)
         
             
             # #if scan is complete
@@ -170,11 +181,11 @@ class StateMachineNode(Node):
         self.detected_objects = []
         self.current_angle = 0.0
     
-    def handle_scan_results(self):
+    def handle_scan_results(self, detected_objects):
         #find closest object
         closest_object = None
         min_distance = float('inf')
-        for obj in self.detected_objects: #detected_objects is [angle, distance]
+        for obj in detected_objects: #detected_objects is [angle, distance]
             if obj[1] < min_distance:  
                 min_distance = obj[1]
                 closest_object = obj
