@@ -29,6 +29,8 @@ class StateMachineNode(Node):
 
         # 360 scan variables
         self.scan_360_active = False
+        self.scanned = False
+        self.scan_count = 0
         self.detected_objects = []
         self.current_angle = 0.0
         self.imu_angle_start = None
@@ -88,21 +90,17 @@ class StateMachineNode(Node):
             #     self.detected_objects.append((cube_angle, cube_distance))
             #     print(f'\n\n\n\n object detected at {cube_angle} a distance of {cube_distance} away.')
 
-            # #turn for x amount of time
-            # turn_time = 0.5
-
-
-            while (self.clock.now() - self.scan_timer).nanoseconds/1e9 < 4:
-                dc.left_speed = -self.spin_speed
-                dc.right_speed = self.spin_speed
-                self.scan_timer2_count += 1
-                if self.scan_timer2_count >= 1:
-                    dc.left_speed = dc.reft_speed = 0
-                    self.handle_scan_results(msg.x_center)
-                    time.sleep(0.1)
-                    self.scan_timer2_count = 0
-                
-
+            if self.scan_count < 4:
+                if not self.scanned:
+                    #scan the field, identify closest or store new entries
+                    self.scanned = True
+                if (self.clock.now() - self.scan_timer).nanoseconds/1e9 < 0.5:
+                    deltaL = -self.spin_speed
+                    deltaR = self.spin_speed
+                else:
+                    scanned = False
+                    self.scan_timer = self.clock.now()
+                    self.scan_count += 1
 
 
             # #scan for the closest object in the new field of vision
