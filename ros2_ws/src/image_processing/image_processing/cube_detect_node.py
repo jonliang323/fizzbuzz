@@ -13,8 +13,12 @@ class CubeDetectNode(Node):
         super().__init__('cube_detect_subscriber')
         self.bridge = CvBridge()
         self.image_sub = self.create_subscription(CompressedImage, "image_raw/compressed", self.image_callback, 10)
-
         self.location_pub = self.create_publisher(CubeTracking, "cube_location_info", 10)
+
+        self.H_MM = 1 #mm, param, to adjust
+        self.F = 2 #mm, param, to adjust
+        self.K = 1 #linear offset
+        self.L = 2*25.4 #mm size of cube
         
     def image_callback(self, msg: CompressedImage):
         frame = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
@@ -43,30 +47,29 @@ class CubeDetectNode(Node):
         model = YOLO("image_processing/image_processing/yolo_weights/best.pt")
         results = model(frame, imgsz=(480,640))
         boxes = results[0].boxes #1 image processed
+        x_center_list = []
+        distance_list = []
+        obj_type_list = []
 
-        # distance to cube
-        if len(boxes) == 0:
-            cube_x_center = -1
-            cube_dist = -1.0
-        else:
-            coords = boxes.xyxy
-            obj_type = boxes.cls
-            cube_x_center = (coords[i][0] + coords[i][2])//2
-
-            y_px = int(coords[i][1] - coords[i][3]) #from bounding box
+        for i in range(len(boxes)):
+            obj_type = boxes.cls[i]
+            coords = boxes.xyxy[i]
+            x_center = (coords[0] + coords[2])//2
+            # distance to cube
+            y_px = int(coords[1] - coords[3]) #from bounding box
             h_px = frame.shape[0]
-            h_mm = 1 #mm, param, to adjust
-            f = 2 #mm, param, to adjust
-            k = 1 #linear offset
-            L = 2*25.4 #mm size of cube
-            cube_dist = round(L*f*h_px/(h_mm*y_px)/10 - k,2) #cm
+            distance = round(self.L*self.F*h_px/(self.H_MM*y_px)/10 - self.K,2) #cm
 
-        print(cube_dist, cube_x_center)
+            x_center_list.append(x_center)
+            distance_list.append(distance)
+            obj_type_list.append(obj_type)
 
+        print(f"{len(boxes)} objects detected on the screen")
 
         cube_info_msg = CubeTracking()
-        cube_info_msg.x_center = int(cube_x_center)
-        cube_info_msg.distance = float(cube_dist)
+        cube_info_msg.x_center = x_center_list
+        cube_info_msg.distance = distance_list
+        cube_info_msg.obj_type = obj_type_list
         self.location_pub.publish(cube_info_msg)
     
 def main(args=None):
