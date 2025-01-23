@@ -9,6 +9,7 @@ import busio
 from image_processing_interfaces.msg import CubeTracking
 from image_processing_interfaces.msg import EncoderCounts
 from image_processing_interfaces.msg import MotorCommand
+from std_msgs.msg import Bool
 
 class StateMachineNode(Node):
     def __init__(self):
@@ -25,7 +26,6 @@ class StateMachineNode(Node):
         self.CLASSES = ['green','red','sphere']
 
         #cv variables
-        self.closest_obj = None
         #encoder variables
         self.encoderL = 0
         self.encoderR = 0
@@ -65,6 +65,7 @@ class StateMachineNode(Node):
         self.encoder_sub = self.create_subscription(EncoderCounts, "encoder_info", self.encoder_callback, 10)
         self.state_machine = self.create_timer(self.dT, self.state_machine_callback)
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
+        self.scan_pub = self.create_publisher(Bool, "scan_activate", 10)
 
         #imu initialization
         spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
@@ -78,13 +79,19 @@ class StateMachineNode(Node):
         self.imu.begin()
     
     def cv_callback(self, msg: CubeTracking):
+        print(f'Requested callback')
+        #enter here when scan is true, from callback recall initiate
         distances = msg.distances
         x_centers = msg.x_centers
         obj_type = msg.obj_types
-        print(f'these are our distances: {distances}')
-        closest = self.find_closest_index(distances)
+
         #obj has descriptors: distance, angle, x_center, type
-        self.closest_obj = {"distance":distances[closest], "angle":self.current_angle, "center":x_centers[closest], "type":self.CLASSES[obj_type[closest]]}
+        if distances != []:
+            closest = self.find_closest_index(distances)
+            closest_obj = {"distance":distances[closest], "angle":self.current_angle, "center":x_centers[closest], "type":self.CLASSES[obj_type[closest]]}
+            self.detected_objects.append(closest_obj)
+        #otherwise, detected objects is not changed
+        self.scan = False
 
 
     def encoder_callback(self, msg: EncoderCounts):
@@ -102,18 +109,12 @@ class StateMachineNode(Node):
         if self.scan_270_active:
             #spins full 270
             if self.turn_angle <= 270:# and self.time_counter < 20: #may want to outsource PID function to call anytime we turn
-                if self.scan:
-                    #snaphsot the field, each object is a stack until knocking over
-                    #could be appending None
-                    if self.closest_obj is not None:
-                        self.detected_objects.append(self.closest_obj)
-                    self.scan = False
-                    print(f'closest_obj: {self.closest_obj}')
                 #turns 270 degrees
-                if self.current_angle < self.turn_angle: #ccw turn, + angle
+                #scan is true
+                if not self.scan and self.current_angle < self.turn_angle: #ccw turn, + angle
                     deltaL = 0#-self.spin_speed
                     deltaR = 0#self.spin_speed
-                else:
+                elif not self.scan: #self.current_angle matched self.turn_angle
                     self.scan = True
                     self.turn_angle += 90
             else: #scan is complete
@@ -210,6 +211,10 @@ class StateMachineNode(Node):
         self.cur_left_speed = dc.left_speed
         self.cur_right_speed = dc.right_speed
         self.motor_pub.publish(motor_msg)
+
+        scan_msg = Bool()
+        scan_msg.data = self.scan
+        self.scan_pub.publish(scan_msg)
     
     def find_closest_index(self, distances):
         #find closest distance index
@@ -230,7 +235,7 @@ class StateMachineNode(Node):
         delta_theta = beta_factor*wZ*dT + (1 - beta_factor) * math.atan((diff_wheel_x1+diff_wheel_x2)/2/self.DIAMETER)
         new = self.current_angle + delta_theta*180/math.pi #degrees
         self.current_angle = round(self.modulate_angle(new),2)
-        print(f'-------------------current_angle: {self.current_angle}')
+        #print(f'-------------------current_angle: {self.current_angle}')
 
     def modulate_angle(self, angle):
         if angle > 0:
