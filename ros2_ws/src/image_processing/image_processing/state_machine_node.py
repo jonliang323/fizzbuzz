@@ -133,7 +133,25 @@ class StateMachineNode(Node):
                 print(f'\n\n all detected_objects: {self.detected_objects} \n\n\n\n')
                 #TODO*** turn to face self.target["angle"] here:
                 #*******
-                self.block_align_drive = True
+ 
+                angle_diff = self.target["angle"] - self.current_angle
+                
+                if angle_diff > 180:
+                    angle_diff -= 360
+                elif angle_diff < -180:
+                    angle_diff += 360
+                
+                if abs(angle_diff) > 5:  #error of 5(?) degrees
+                    if angle_diff > 0:
+                        deltaL = -self.spin_speed
+                        deltaR = self.spin_speed
+                    else:
+                        deltaL = self.spin_speed
+                        deltaR = -self.spin_speed
+                else:
+                    self.block_align_drive = True
+                    deltaL = 0
+                    deltaR = 0
 
         # PID alignment, while still or driving; cube to align to should depend on recorded angle
         if self.block_align_drive:
