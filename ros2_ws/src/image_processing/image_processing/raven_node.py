@@ -56,8 +56,8 @@ class RavenNode(Node):
         # print(f"Right Motor - Speed: {right_speed}, Reverse: {right_rev}")
 
         # Speed controlled:
-        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, left_speed, reverse=left_rev)
-        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, right_speed, reverse=right_rev)
+        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, right_speed, reverse=right_rev)
+        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, left_speed, reverse=left_rev)
 
         # Torque controlled:
         # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, 100) # Make motor try to run at max speed forward
@@ -67,8 +67,8 @@ class RavenNode(Node):
         # self.raven_board.set_servo_position(Raven.ServoChannel.CH1, servo.angle, servo.min_us, servo.max_us)
         self.raven_board.set_servo_position(Raven.ServoChannel.CH1, servo.angle1, 500, 2500)
         self.raven_board.set_servo_position(Raven.ServoChannel.CH2, servo.angle2, 500, 2500)
-        self.raven_board.set_servo_position(Raven.ServoChannel.CH2, servo.angle3, 500, 2500)
-        self.raven_board.set_servo_position(Raven.ServoChannel.CH2, servo.angle4, 500, 2500)
+        self.raven_board.set_servo_position(Raven.ServoChannel.CH3, servo.angle3, 500, 2500)
+        self.raven_board.set_servo_position(Raven.ServoChannel.CH4, servo.angle4, 500, 2500)
 
         encoder_msg = EncoderCounts()
         encoder_msg.encoder1 = self.get_raven_board.motor_encoder(Raven.MotorChannel.CH1, 0)
