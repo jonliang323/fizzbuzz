@@ -16,7 +16,7 @@ def generate_launch_description():
 
     state_machine_node = Node(
         package = 'image_processing',
-        executable = 'state_machine_subscriber',
+        executable = 'state_machine',
         output = 'screen'
     )
 

@@ -65,10 +65,10 @@ class RavenNode(Node):
 
         # Set the servo 1 to x degrees with custom pulse microseconds
         # self.raven_board.set_servo_position(Raven.ServoChannel.CH1, servo.angle, servo.min_us, servo.max_us)
-        self.raven_board.set_servo_position(Raven.ServoChannel.CH1, servo.angle1, 500, 2500)
-        self.raven_board.set_servo_position(Raven.ServoChannel.CH2, servo.angle2, 500, 2500)
-        self.raven_board.set_servo_position(Raven.ServoChannel.CH3, servo.angle3, 500, 2500)
-        self.raven_board.set_servo_position(Raven.ServoChannel.CH4, servo.angle4, 500, 2500)
+        self.raven_board.set_servo_position(Raven.ServoChannel.CH1, servo.angle1_elev, 500, 2500)
+        self.raven_board.set_servo_position(Raven.ServoChannel.CH2, servo.angle2_claw, 500, 2500)
+        self.raven_board.set_servo_position(Raven.ServoChannel.CH3, servo.angle3_flap, 500, 2500)
+        self.raven_board.set_servo_position(Raven.ServoChannel.CH4, servo.angle4_duck, 500, 2500)
 
         encoder_msg = EncoderCounts()
         encoder_msg.encoder1 = self.get_raven_board.motor_encoder(Raven.MotorChannel.CH1, 0)

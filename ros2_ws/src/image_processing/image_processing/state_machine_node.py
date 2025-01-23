@@ -47,7 +47,8 @@ class StateMachineNode(Node):
         self.scan_270_active = True
         self.scan = True
         self.detected_objects = []
-        self.spin_speed = 30 #30 is placeholder 
+        self.spin_speed = 80 #30 is placeholder 
+        self.time_counter = 0
 
         #elevator variables
         self.block_intake = False
@@ -89,23 +90,30 @@ class StateMachineNode(Node):
         self.encoderL = msg.encoder1
         self.encoderR = msg.encoder2
 
-    def state_machine_callback(self):        
+    def state_machine_callback(self): #called every 0.5 seconds
         deltaL, deltaR = 0,0
         norm_speed = 0 #no decel
         self.update_angle(self.dT)
+        # motor_msg = MotorCommand()
+        # dc = motor_msg.drive_motors
+        # servo = motor_msg.actuate_motors
         
         if self.scan_270_active:
             #spins full 270
-            if self.turn_angle <= 270: #may want to outsource PID function to call anytime we turn
+            if self.turn_angle <= 270 and self.time_counter < 20: #may want to outsource PID function to call anytime we turn
                 if self.scan:
                     #snaphsot the field, each object is a stack until knocking over
                     #distance, angle of detection (ideally 0, 90, 180, 270)
                     self.detected_objects.append(self.closest_obj) #maybe integrate with new angle calculation
                     self.scan = False
+                    print({f'closest_obj: {self.closest_obj}'})
                 #turns 270 degrees
                 if self.current_angle < self.turn_angle: #ccw turn, + angle
-                    deltaL = -self.spin_speed
-                    deltaR = self.spin_speed
+                    # deltaL = -self.spin_speed
+                    # deltaR = self.spin_speed
+                    
+                    deltaL = deltaR = 0
+                    print(f"left speed: {deltaL} \n right speed: {deltaR}")
                 else:
                     self.scan = True
                     self.turn_angle += 90
@@ -120,24 +128,25 @@ class StateMachineNode(Node):
                 #*** turn to face self.target["angle"] here:
                 #*******
  
-                angle_diff = self.target["angle"] - self.current_angle
+                # angle_diff = self.target["angle"] - self.current_angle
                 
-                if angle_diff > 180:
-                    angle_diff -= 360
-                elif angle_diff < -180:
-                    angle_diff += 360
+                # if angle_diff > 180:
+                #     angle_diff -= 360
+                # elif angle_diff < -180:
+                #     angle_diff += 360
                 
-                if abs(angle_diff) > 5:  #error of 5(?) degrees
-                    if angle_diff > 0:
-                        deltaL = -self.spin_speed
-                        deltaR = self.spin_speed
-                    else:
-                        deltaL = self.spin_speed
-                        deltaR = -self.spin_speed
-                else:
-                    self.block_align_drive = True
-                    deltaL = 0
-                    deltaR = 0
+                # if abs(angle_diff) > 5:  #error of 5(?) degrees
+                #     if angle_diff > 0:
+                #         deltaL = -self.spin_speed
+                #         deltaR = self.spin_speed
+                #     else:
+                #         deltaL = self.spin_speed
+                #         deltaR = -self.spin_speed
+                # else:
+                #     # self.block_align_drive = True
+                #     deltaL = 0
+                #     deltaR = 0
+            self.time_counter += 1
 
         # PID alignment, while still or driving; cube to align to should depend on recorded angle
         if self.block_align_drive:
@@ -155,7 +164,7 @@ class StateMachineNode(Node):
                 print("Right integral saturated")
             
             #capped deltas
-            deltaL = max(min(self.p_gainL * cur_align_error + self.i_gainL * self.error_integralL + self.d_gainL * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
+            deltaL = -max(min(self.p_gainL * cur_align_error + self.i_gainL * self.error_integralL + self.d_gainL * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
             deltaR = max(min(self.p_gainR * cur_align_error + self.i_gainR * self.error_integralR + self.d_gainR * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
 
             #Drive until condition is met
@@ -187,7 +196,7 @@ class StateMachineNode(Node):
         servo = motor_msg.actuate_motors
 
         #set motor speeds
-        dc.left_speed = norm_speed - deltaL
+        dc.left_speed = norm_speed + deltaL
         dc.right_speed = norm_speed + deltaR
         servo.angle1_elev = self.angle1_elev
         servo.angle2_claw = self.angle2_claw
@@ -211,11 +220,12 @@ class StateMachineNode(Node):
         beta_factor = 0.4
         _, gyro = self.imu.get_data()
         wZ = gyro[2]
-        diff_wheel_x1 = (alpha_wR*self.cur_wR - alpha_wL*self.cur_wL)*self.WHEEL_RAD*dT
-        diff_wheel_x2 = (self.encoderR - self.encoderL)/440*2*math.PI*self.WHEEL_RAD
-        delta_theta = beta_factor*wZ*dT + (1 - beta_factor) * math.arcsin((diff_wheel_x1+diff_wheel_x2)/2/self.DIAMETER)
-        new = self.current_angle + delta_theta*180/math.PI #degrees
+        diff_wheel_x1 = (alpha_wR*self.cur_right_speed - alpha_wL*self.cur_left_speed)*self.WHEEL_RADIUS*dT
+        diff_wheel_x2 = (self.encoderR - self.encoderL)/440*2*math.pi*self.WHEEL_RADIUS
+        delta_theta = beta_factor*wZ*dT + (1 - beta_factor) * math.asin((diff_wheel_x1+diff_wheel_x2)/2/self.DIAMETER)
+        new = self.current_angle + delta_theta*180/math.pi #degrees
         self.current_angle = self.modulate_angle(new)
+        print(f'-------------------current_angle: {self.current_angle}')
 
     def modulate_angle(self, angle):
         if angle > 0:

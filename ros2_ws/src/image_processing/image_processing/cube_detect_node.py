@@ -52,9 +52,9 @@ class CubeDetectNode(Node):
         obj_type_list = []
 
         for i in range(len(boxes)):
-            obj_type = boxes.cls[i]
+            obj_type = int(boxes.cls[i])
             coords = boxes.xyxy[i]
-            x_center = (coords[0] + coords[2])//2
+            x_center = int((coords[0] + coords[2])/2)
             # distance to cube
             y_px = int(coords[1] - coords[3]) #from bounding box
             h_px = frame.shape[0]
@@ -67,6 +67,7 @@ class CubeDetectNode(Node):
         print(f"{len(boxes)} objects detected on the screen")
 
         cube_info_msg = CubeTracking()
+        # print(f'x_center: {x_center_list} \n dist: {distance_list} \n obj: {obj_type_list}')
         cube_info_msg.x_centers = x_center_list
         cube_info_msg.distances = distance_list
         cube_info_msg.obj_types = obj_type_list
