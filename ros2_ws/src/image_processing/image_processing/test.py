@@ -69,10 +69,3 @@
 
 # except Exception as e:
 #     print(f"An error occurred: {e}")
-import numpy as np
-from ultralytics import YOLO
-model = YOLO("ros2_ws/src/image_processing/image_processing/yolo_weights/best.pt")
-results = model("ros2_ws/src/image_processing/image_processing/test/3.jpg", imgsz=640)
-boxes = results[0].boxes
-
-# print(results[0].boxes[0].xyxy)

@@ -34,9 +34,9 @@ class StateMachineNode(Node):
         self.cur_left_speed = 0
         self.cur_right_speed = 0
         self.current_angle = 0.0
-        self.turn_angle = 0
+        self.turn_angle_history = (90,0)
 
-        self.block_align = False
+        self.block_align_drive = False
         self.prev_align_error = 0
         self.error_integralL, self.error_integralR = 0,0
         #gains should result in critical damping, best response
@@ -44,17 +44,16 @@ class StateMachineNode(Node):
         self.p_gainR, self.i_gainR, self.d_gainR = 1,0,0
 
         # 360 scan variables
-        self.scan_360_active = False
-        self.scanned = False
-        self.scan_count = 0
+        self.scan_360_active = True
+        self.scan = True
         self.detected_objects = []
         self.spin_speed = 30 #30 is placeholder 
-        self.scan_timer = self.clock.now()
 
         #elevator variables
         self.block_intake = False
         self.first_sphere_grabbed = False
         self.red_counter = 0
+        #TODO needed?
         #self.elevator_timer = self.create_timer(0.5, self.activate_elevator)
         #self.elevator_timer_counter = 0
         self.elevator_state = 'idle'
@@ -74,15 +73,14 @@ class StateMachineNode(Node):
 
         self.imu = ICM42688(spi)
         self.imu.begin()
-
-        self.start_360_scan()
     
     def cv_callback(self, msg: CubeTracking):
         distances = msg.distances
         x_centers = msg.x_centers
         obj_type = msg.obj_types
         closest = self.find_closest_index(distances)
-        self.closest_obj = (distances[closest], x_centers[closest], obj_type[closest])
+        #obj has descriptors: distance, angle, x_center, type
+        self.closest_obj = {"distance":distances[closest], "angle":self.current_angle, "center":x_centers[closest], "type":self.CLASSES[obj_type[closest]]}
 
 
     def encoder_callback(self, msg: EncoderCounts):
@@ -95,7 +93,8 @@ class StateMachineNode(Node):
         self.update_angle(self.dT)
         
         if self.scan_360_active:
-            self.turn_angle = 90
+            self.turn_angle_history = 90
+            #TODO not needed anymore with new scanning
             # #if object is detected at center
             # if abs(msg.x_center - 320) <= 40:
             #     # self.scan_360_active = False
@@ -107,61 +106,65 @@ class StateMachineNode(Node):
             #     self.detected_objects.append((cube_angle, cube_distance))
             #     print(f'\n\n\n\n object detected at {cube_angle} a distance of {cube_distance} away.')
 
-            if self.scan_count < 4:
-                if not self.scanned:
+            #spins full 360, then no more
+            #no scan on arrival at 360
+            if self.turn_angle_history[1] != 360:
+                if self.scan:
                     #snaphsot the field, each object is a stack until knocking over
                     #distance, angle of detection (ideally 0, 90, 180, 270)
-                    cur_angle = self.scan_count*90
-                    self.detected_objects.append(self.closest_obj, cur_angle) #maybe integrate with new angle calculation
-                    self.scanned = True
+                    self.detected_objects.append(self.closest_obj) #maybe integrate with new angle calculation
+                    self.scan = False
                 #time for 90 degree turn, can be adjusted for proper angle turn
-                #if (self.clock.now() - self.scan_timer).nanoseconds/1e9 < 0.5:
-                if self.current_angle < self.turn_angle:
+                #TODO** issue with turning to exactly 360 degrees, overshooting error,
+                #****** will need to transform angle to -180 to 180 representation temporarily
+                if self.current_angle < self.turn_angle: #ccw turn, + angle
                     deltaL = -self.spin_speed
                     deltaR = self.spin_speed
                 else:
-                    scanned = False
-                    self.turn_angle += 90
-                    self.scan_count += 1
-            else: #if scan is complete
+                    self.scan = True
+                    self.update_turn_angle_history(90)
+            else: #360 scan is complete
                 self.scan_360_active = False
                 deltaL = 0
                 deltaR = 0
-                closest = self.find_closest_index([obj[0] for obj in self.detected_objects])
+                closest = self.find_closest_index([obj["distance"] for obj in self.detected_objects])
                 self.target = self.detected_objects[closest]
-                print(f'\n\n scan complete, closest object is {self.CLASSES[self.target[2]]},\n{self.target[0]} away at an angle of...')
-                #angle_diff = (self.current_angle - closest_object[0]) % 360
-                print(f'\n\n all detected_objects: {self.detected_objects} \n\n\n\n') 
-                self.block_align = True
+                print(f'\n\n scan complete, closest object is {self.target["type"]},\n{self.target["distance"]} away at an angle of {self.target["angle"]} \n\n\n\n')
+                print(f'\n\n all detected_objects: {self.detected_objects} \n\n\n\n')
+                #TODO*** turn to face self.target["angle"] here:
+                #*******
+                self.block_align_drive = True
 
-        #PID align to angle, then use x_center? or just angle?
         # PID alignment, while still or driving; cube to align to should depend on recorded angle
-        #if self.block_align:
-            # if msg.x_center is not None:
-            #     cur_align_error = self.FOV_XY[0]//2 - msg.x_center
-            #     #capped integral terms
-            #     self.error_integralL = min(self.error_integralL + cur_align_error*dT, self.MAX_DELTA/self.i_gainL)
-            #     self.error_integralR = min(self.error_integralR + cur_align_error*dT, self.MAX_DELTA/self.i_gainR)
-            #     error_deriv = (cur_align_error - self.prev_align_error)/dT
+        if self.block_align_drive:
+            #positive error -> turn left
+            #negative error -> turn right
+            cur_align_error = self.FOV_XY[0]//2 - self.target["center"]
+            #capped integral terms
+            self.error_integralL = max(min(self.error_integralL + cur_align_error*self.dT, self.MAX_DELTA/self.i_gainL), -self.MAX_DELTA/self.i_gainL)
+            self.error_integralR = max(min(self.error_integralR + cur_align_error*self.dT, self.MAX_DELTA/self.i_gainR), -self.MAX_DELTA/self.i_gainR)
+            error_deriv = (cur_align_error - self.prev_align_error)/self.dT
 
-            #     if self.error_integralL == self.MAX_DELTA/self.i_gainL:
-            #         print("Left integral saturated")
-            #     if self.error_integralR == self.MAX_DELTA/self.i_gainR:
-            #         print("Right integral saturated")
-                
-            #     #capped deltas
-            #     deltaL = min(self.p_gainL * cur_align_error + self.i_gainL * self.error_integralL + self.d_gainL * error_deriv, self.MAX_DELTA)
-            #     deltaR = min(self.p_gainR * cur_align_error + self.i_gainR * self.error_integralR + self.d_gainR * error_deriv, self.MAX_DELTA)
+            if abs(self.error_integralL) == self.MAX_DELTA/self.i_gainL:
+                print("Left integral saturated")
+            if abs(self.error_integralR) == self.MAX_DELTA/self.i_gainR:
+                print("Right integral saturated")
+            
+            #capped deltas
+            deltaL = max(min(self.p_gainL * cur_align_error + self.i_gainL * self.error_integralL + self.d_gainL * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
+            deltaR = max(min(self.p_gainR * cur_align_error + self.i_gainR * self.error_integralR + self.d_gainR * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
 
-            #     self.prev_align_error = cur_align_error
+            #Drive until condition is met
+            if self.target["distance"] > 2: #to within 2 cm
+                norm_speed = self.NORM_SPEED
+            else: #stop
+                norm_speed = 0
+                self.block_align_drive = False
+                self.block_intake = True
 
-        #Drive until condition is met
-        # if self.drive_condition(msg.distance):
-        #     norm_speed = self.NORM_SPEED
-        # else: #stop
-        #     norm_speed = 0
-        #     self.block_intake = True
+            self.prev_align_error = cur_align_error
 
+        #TODO: block intake, elevator, bird, dumptruck
         # if self.block_intake:
         #     if block == green or self.first_sphere_grabbed == False:
         #         self.activate_elevator()
@@ -179,17 +182,11 @@ class StateMachineNode(Node):
         dc = motor_msg.drive_motors
         servo = motor_msg.actuate_motors
         #change servo speeds
-        dc.left_speed = norm_speed + deltaL
+        dc.left_speed = norm_speed - deltaL
         dc.right_speed = norm_speed + deltaR
         self.cur_left_speed = dc.left_speed
         self.cur_right_speed = dc.right_speed
         self.motor_pub.publish(motor_msg)
-
-        self.prev_time = self.clock.now() #in case state_machine takes a bit to run
-
-    def start_360_scan(self):
-        self.scan_360_active = True
-        self.detected_objects = []
     
     def find_closest_index(self, distances):
         #find closest distance index
@@ -199,6 +196,11 @@ class StateMachineNode(Node):
                 min = i
         return min
     
+    def update_turn_angle_history(self, incr):
+        new = (self.turn_angle_history[0] + incr)
+        #0 entry is new angle, right entry is last angle
+        self.turn_angle_history = (self.modulate_angle(new), self.turn_angle_history[0])
+    
     def update_angle(self, dT):
         alpha_wL, alpha_wR = 1, 1
         beta_factor = 0.4
@@ -207,8 +209,17 @@ class StateMachineNode(Node):
         diff_wheel_x1 = (alpha_wR*self.cur_wR - alpha_wL*self.cur_wL)*self.WHEEL_RAD*dT
         diff_wheel_x2 = (self.encoderR - self.encoderL)/440*2*math.PI*self.WHEEL_RAD
         delta_theta = beta_factor*wZ*dT + (1 - beta_factor) * math.arcsin((diff_wheel_x1+diff_wheel_x2)/2/self.DIAMETER)
-        self.current_angle += delta_theta*180/math.PI #degrees
+        #**
+        new = self.current_angle + delta_theta*180/math.PI #degrees
+        self.current_angle = self.modulate_angle(new)
 
+    def modulate_angle(self, angle):
+        if angle > 0:
+            return angle%360 if angle > 360 else angle
+        else:
+            return -(abs(angle)%360) if abs(angle) > 360 else angle
+
+    #TODO: implement elevator
     def activate_elevator(self):
         motor_msg = MotorCommand()
 
@@ -255,21 +266,18 @@ class StateMachineNode(Node):
         # Publish motor command
         self.elevator_pub.publish(motor_msg)
         
-
+    #TODO: implement bird
     def activate_bird(self):
         #activate bird when red block comes
         motor_msg = MotorCommand()
 
         motor_msg.actuate_motors.angle4 = -90 #idk what the bird angles are
-
+    
+    #TODO: implement dumptruck
     def activate_dumptruck(self):
         motor_msg = MotorCommand()
         #some way to drive to purple wall
-        motor_msg.drive_motors.left_speed = 30 #change this, maybe add something in DCCommand.msg like dt_speed and set to 0 for everything except when dt is activated    
-        
-    def drive_condition(self, cube_dist):
-        #can be more complex
-        return cube_dist > 2
+        motor_msg.drive_motors.left_speed = 30 #change this, maybe add something in DCCommand.msg like dt_speed and set to 0 for everything except when dt is activated
     
 
 def main(args=None):
