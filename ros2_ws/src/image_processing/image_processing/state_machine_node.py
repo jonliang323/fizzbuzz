@@ -34,7 +34,7 @@ class StateMachineNode(Node):
         self.cur_left_speed = 0
         self.cur_right_speed = 0
         self.current_angle = 0.0
-        self.turn_angle_history = (90,0)
+        self.turn_angle = 90
 
         self.block_align_drive = False
         self.prev_align_error = 0
@@ -44,7 +44,7 @@ class StateMachineNode(Node):
         self.p_gainR, self.i_gainR, self.d_gainR = 1,0,0
 
         # 360 scan variables
-        self.scan_360_active = True
+        self.scan_270_active = True
         self.scan = True
         self.detected_objects = []
         self.spin_speed = 30 #30 is placeholder 
@@ -53,10 +53,12 @@ class StateMachineNode(Node):
         self.block_intake = False
         self.first_sphere_grabbed = False
         self.red_counter = 0
-        #TODO needed?
-        #self.elevator_timer = self.create_timer(0.5, self.activate_elevator)
-        #self.elevator_timer_counter = 0
+        self.elevator_timer_count = 0
         self.elevator_state = 'idle'
+        self.angle1_elev = 0
+        self.angle2_claw = 0
+        self.angle3_flap = 0
+        self.angle4_duck = 0
 
         self.cv_sub = self.create_subscription(CubeTracking, "cube_location_info", self.cv_callback, 10)
         self.encoder_sub = self.create_subscription(EncoderCounts, "encoder_info", self.encoder_callback, 10)
@@ -92,46 +94,30 @@ class StateMachineNode(Node):
         norm_speed = 0 #no decel
         self.update_angle(self.dT)
         
-        if self.scan_360_active:
-            self.turn_angle_history = 90
-            #TODO not needed anymore with new scanning
-            # #if object is detected at center
-            # if abs(msg.x_center - 320) <= 40:
-            #     # self.scan_360_active = False
-            #     # dc.left_speed = 0
-            #     # dc.right_speed = 0
-            #     self.prev_time = self.clock.now()
-            #     cube_angle = self.current_angle 
-            #     cube_distance = msg.distance
-            #     self.detected_objects.append((cube_angle, cube_distance))
-            #     print(f'\n\n\n\n object detected at {cube_angle} a distance of {cube_distance} away.')
-
-            #spins full 360, then no more
-            #no scan on arrival at 360
-            if self.turn_angle_history[1] != 360:
+        if self.scan_270_active:
+            #spins full 270
+            if self.turn_angle <= 270: #may want to outsource PID function to call anytime we turn
                 if self.scan:
                     #snaphsot the field, each object is a stack until knocking over
                     #distance, angle of detection (ideally 0, 90, 180, 270)
                     self.detected_objects.append(self.closest_obj) #maybe integrate with new angle calculation
                     self.scan = False
-                #time for 90 degree turn, can be adjusted for proper angle turn
-                #TODO** issue with turning to exactly 360 degrees, overshooting error,
-                #****** will need to transform angle to -180 to 180 representation temporarily
+                #turns 270 degrees
                 if self.current_angle < self.turn_angle: #ccw turn, + angle
                     deltaL = -self.spin_speed
                     deltaR = self.spin_speed
                 else:
                     self.scan = True
-                    self.update_turn_angle_history(90)
-            else: #360 scan is complete
-                self.scan_360_active = False
+                    self.turn_angle += 90
+            else: #scan is complete
+                self.scan_270_active = False
                 deltaL = 0
                 deltaR = 0
                 closest = self.find_closest_index([obj["distance"] for obj in self.detected_objects])
                 self.target = self.detected_objects[closest]
                 print(f'\n\n scan complete, closest object is {self.target["type"]},\n{self.target["distance"]} away at an angle of {self.target["angle"]} \n\n\n\n')
                 print(f'\n\n all detected_objects: {self.detected_objects} \n\n\n\n')
-                #TODO*** turn to face self.target["angle"] here:
+                #*** turn to face self.target["angle"] here:
                 #*******
  
                 angle_diff = self.target["angle"] - self.current_angle
@@ -199,9 +185,15 @@ class StateMachineNode(Node):
         motor_msg = MotorCommand()
         dc = motor_msg.drive_motors
         servo = motor_msg.actuate_motors
-        #change servo speeds
+
+        #set motor speeds
         dc.left_speed = norm_speed - deltaL
         dc.right_speed = norm_speed + deltaR
+        servo.angle1_elev = self.angle1_elev
+        servo.angle2_claw = self.angle2_claw
+        servo.angle3_flap = self.angle3_flap
+        servo.angle4_duck = self.angle4_duck
+
         self.cur_left_speed = dc.left_speed
         self.cur_right_speed = dc.right_speed
         self.motor_pub.publish(motor_msg)
@@ -214,11 +206,6 @@ class StateMachineNode(Node):
                 min = i
         return min
     
-    def update_turn_angle_history(self, incr):
-        new = (self.turn_angle_history[0] + incr)
-        #0 entry is new angle, right entry is last angle
-        self.turn_angle_history = (self.modulate_angle(new), self.turn_angle_history[0])
-    
     def update_angle(self, dT):
         alpha_wL, alpha_wR = 1, 1
         beta_factor = 0.4
@@ -227,7 +214,6 @@ class StateMachineNode(Node):
         diff_wheel_x1 = (alpha_wR*self.cur_wR - alpha_wL*self.cur_wL)*self.WHEEL_RAD*dT
         diff_wheel_x2 = (self.encoderR - self.encoderL)/440*2*math.PI*self.WHEEL_RAD
         delta_theta = beta_factor*wZ*dT + (1 - beta_factor) * math.arcsin((diff_wheel_x1+diff_wheel_x2)/2/self.DIAMETER)
-        #**
         new = self.current_angle + delta_theta*180/math.PI #degrees
         self.current_angle = self.modulate_angle(new)
 
@@ -237,7 +223,6 @@ class StateMachineNode(Node):
         else:
             return -(abs(angle)%360) if abs(angle) > 360 else angle
 
-    #TODO: implement elevator
     def activate_elevator(self):
         motor_msg = MotorCommand()
 
@@ -247,7 +232,7 @@ class StateMachineNode(Node):
         
 
         if self.elevator_state == 'open claws':
-            motor_msg.actuate_motors.angle2 = -40  #claws open
+            self.angle2_claw = -40  #claws open
             self.elevator_timer_count += 1
 
             if self.elevator_timer_count >= 4:  #wait 2 seconds
@@ -255,8 +240,8 @@ class StateMachineNode(Node):
                 self.elevator_timer_count = 0
 
         elif self.elevator_state == 'elev move down':
-            motor_msg.actuate_motors.angle1 = -90  #elevator moves down
-            motor_msg.actuate_motors.angle3 = 90   #flap closes
+            self.angle1_elev = -90  #elevator moves down
+            self.angle3_flap = 90   #flap closes
 
             self.elevator_timer_count += 1
             if self.elevator_timer_count >= 4:  
@@ -265,24 +250,20 @@ class StateMachineNode(Node):
 
         #return elevator to starting position
         elif self.elevator_state == 'close claws':
-            motor_msg.actuate_motors.angle2 = -25  #claws close
+            self.angle2_claw = -25  #claws close
             self.elevator_timer_count += 1
             if self.elevator_timer_count >= 4:  
                 self.elevator_state = 'elev move up'
                 self.elevator_timer_count = 0
 
         elif self.elevator_state == 'elev move up':
-            motor_msg.actuate_motors.angle1 = -90  #elevator moves up while holding block
-            motor_msg.actuate_motors.angle3 = 90   #flap opens, ready for next block
+            self.angle1_elev = -90  #elevator moves up while holding block
+            self.angle3_flap = 90   #flap opens, ready for next block
             self.elevator_timer_count += 1
 
             if self.elevator_timer_count >= 4:  
                 self.elevator_state = 'idle'
                 self.elevator_timer_count = 0
-
-
-        # Publish motor command
-        self.elevator_pub.publish(motor_msg)
         
     #TODO: implement bird
     def activate_bird(self):
