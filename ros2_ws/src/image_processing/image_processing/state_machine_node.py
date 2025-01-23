@@ -104,8 +104,9 @@ class StateMachineNode(Node):
             if self.turn_angle <= 270:# and self.time_counter < 20: #may want to outsource PID function to call anytime we turn
                 if self.scan:
                     #snaphsot the field, each object is a stack until knocking over
-                    #distance, angle of detection (ideally 0, 90, 180, 270)
-                    self.detected_objects.append(self.closest_obj) #maybe integrate with new angle calculation
+                    #could be appending None
+                    if self.closest_obj is not None:
+                        self.detected_objects.append(self.closest_obj)
                     self.scan = False
                     print(f'closest_obj: {self.closest_obj}')
                 #turns 270 degrees
@@ -116,13 +117,16 @@ class StateMachineNode(Node):
                     self.scan = True
                     self.turn_angle += 90
             else: #scan is complete
-                print(f'--counter: {self.time_counter}')
-                print(f'{self.turn_angle}')
+                # print(f'--counter: {self.time_counter}')
+                # print(f'{self.turn_angle}')
                 self.scan_270_active = False
                 deltaL = 0
                 deltaR = 0
-                closest = self.find_closest_index([obj["distance"] for obj in self.detected_objects])
-                self.target = self.detected_objects[closest]
+                if len(self.detected_objects) > 0:
+                    closest = self.find_closest_index([obj["distance"] for obj in self.detected_objects])
+                    self.target = self.detected_objects[closest]
+                else:
+                    self.target = {"distance":None, "angle":0, "center":None, "type":None}
                 print(f'\n\n scan complete, closest object is {self.target["type"]},\n{self.target["distance"]} away at an angle of {self.target["angle"]} \n\n\n\n')
                 print(f'\n\n all detected_objects: {self.detected_objects} \n\n\n\n')
                 #*** turn to face self.target["angle"] here:

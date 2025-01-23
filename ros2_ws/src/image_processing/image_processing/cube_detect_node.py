@@ -5,7 +5,7 @@ from image_processing_interfaces.msg import CubeTracking
 import cv2
 from cv_bridge import CvBridge
 import numpy as np
-from ultralytics import YOLO
+import yolo
 
 class CubeDetectNode(Node):
 
@@ -14,6 +14,7 @@ class CubeDetectNode(Node):
         self.bridge = CvBridge()
         self.image_sub = self.create_subscription(CompressedImage, "image_raw/compressed", self.image_callback, 10)
         self.location_pub = self.create_publisher(CubeTracking, "cube_location_info", 10)
+        self.box_map_pub = self.create_publisher(CompressedImage, "box_map", 10)
 
         self.H_MM = 1 #mm, param, to adjust
         self.F = 2 #mm, param, to adjust
@@ -51,7 +52,7 @@ class CubeDetectNode(Node):
         distance_list = []
         obj_type_list = []
 
-        print(f'results detected -------------------- :\n{boxes}')
+        #print(f'results detected -------------------- :\n{boxes}')
 
         for i in range(len(boxes)):
             obj_type = int(boxes.cls[i])
@@ -66,7 +67,7 @@ class CubeDetectNode(Node):
             distance_list.append(distance)
             obj_type_list.append(obj_type)
 
-        print(f"{len(boxes)} objects detected on the screen")
+        #print(f"{len(boxes)} objects detected on the screen")
 
         cube_info_msg = CubeTracking()
         # print(f'x_center: {x_center_list} \n dist: {distance_list} \n obj: {obj_type_list}')
@@ -74,6 +75,8 @@ class CubeDetectNode(Node):
         cube_info_msg.distances = distance_list
         cube_info_msg.obj_types = obj_type_list
         self.location_pub.publish(cube_info_msg)
+
+
     
 def main(args=None):
     rclpy.init()
