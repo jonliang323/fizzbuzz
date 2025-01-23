@@ -71,8 +71,8 @@ class RavenNode(Node):
         self.raven_board.set_servo_position(Raven.ServoChannel.CH4, servo.angle4_duck, 500, 2500)
 
         encoder_msg = EncoderCounts()
-        encoder_msg.encoder1 = self.get_raven_board.motor_encoder(Raven.MotorChannel.CH1, 0)
-        encoder_msg.encoder2 = self.get_raven_board.motor_encoder(Raven.MotorChannel.CH2, 0)
+        encoder_msg.encoder1 = self.raven_board.get_motor_encoder(Raven.MotorChannel.CH1, 0)
+        encoder_msg.encoder2 = self.raven_board.get_motor_encoder(Raven.MotorChannel.CH2, 0)
         self.encoder_pub.publish(encoder_msg)
 
 

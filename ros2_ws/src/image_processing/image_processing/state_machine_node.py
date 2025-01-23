@@ -20,8 +20,8 @@ class StateMachineNode(Node):
         self.MAX_SPEED = 100
         self.NORM_SPEED = 50
         self.MAX_DELTA = self.MAX_SPEED - self.NORM_SPEED
-        self.WHEEL_RADIUS = 2*0.0254 #meters
-        self.DIAMETER = 8*0.0254 #meters
+        self.WHEEL_RADIUS = (3.1875/2)*0.0254 #meters
+        self.DIAMETER = 10.125*0.0254 #meters
         self.CLASSES = ['green','red','sphere']
 
         #cv variables
@@ -47,7 +47,7 @@ class StateMachineNode(Node):
         self.scan_270_active = True
         self.scan = True
         self.detected_objects = []
-        self.spin_speed = 80 #30 is placeholder 
+        self.spin_speed = 50 #30 is placeholder 
         self.time_counter = 0
 
         #elevator variables
@@ -81,6 +81,7 @@ class StateMachineNode(Node):
         distances = msg.distances
         x_centers = msg.x_centers
         obj_type = msg.obj_types
+        print(f'these are our distances: {distances}')
         closest = self.find_closest_index(distances)
         #obj has descriptors: distance, angle, x_center, type
         self.closest_obj = {"distance":distances[closest], "angle":self.current_angle, "center":x_centers[closest], "type":self.CLASSES[obj_type[closest]]}
@@ -100,24 +101,23 @@ class StateMachineNode(Node):
         
         if self.scan_270_active:
             #spins full 270
-            if self.turn_angle <= 270 and self.time_counter < 20: #may want to outsource PID function to call anytime we turn
+            if self.turn_angle <= 270:# and self.time_counter < 20: #may want to outsource PID function to call anytime we turn
                 if self.scan:
                     #snaphsot the field, each object is a stack until knocking over
                     #distance, angle of detection (ideally 0, 90, 180, 270)
                     self.detected_objects.append(self.closest_obj) #maybe integrate with new angle calculation
                     self.scan = False
-                    print({f'closest_obj: {self.closest_obj}'})
+                    print(f'closest_obj: {self.closest_obj}')
                 #turns 270 degrees
                 if self.current_angle < self.turn_angle: #ccw turn, + angle
-                    # deltaL = -self.spin_speed
-                    # deltaR = self.spin_speed
-                    
-                    deltaL = deltaR = 0
-                    print(f"left speed: {deltaL} \n right speed: {deltaR}")
+                    deltaL = 0#-self.spin_speed
+                    deltaR = 0#self.spin_speed
                 else:
                     self.scan = True
                     self.turn_angle += 90
             else: #scan is complete
+                print(f'--counter: {self.time_counter}')
+                print(f'{self.turn_angle}')
                 self.scan_270_active = False
                 deltaL = 0
                 deltaR = 0
@@ -222,9 +222,10 @@ class StateMachineNode(Node):
         wZ = gyro[2]
         diff_wheel_x1 = (alpha_wR*self.cur_right_speed - alpha_wL*self.cur_left_speed)*self.WHEEL_RADIUS*dT
         diff_wheel_x2 = (self.encoderR - self.encoderL)/440*2*math.pi*self.WHEEL_RADIUS
-        delta_theta = beta_factor*wZ*dT + (1 - beta_factor) * math.asin((diff_wheel_x1+diff_wheel_x2)/2/self.DIAMETER)
+        #print(f'Check these out:\npiece1: {diff_wheel_x1}\npiece2: {diff_wheel_x2}\nnum: {(diff_wheel_x1+diff_wheel_x2)},\ndenom: {2*self.DIAMETER},\ntotal: {(diff_wheel_x1+diff_wheel_x2)/2/self.DIAMETER}')
+        delta_theta = beta_factor*wZ*dT + (1 - beta_factor) * math.atan((diff_wheel_x1+diff_wheel_x2)/2/self.DIAMETER)
         new = self.current_angle + delta_theta*180/math.pi #degrees
-        self.current_angle = self.modulate_angle(new)
+        self.current_angle = round(self.modulate_angle(new),2)
         print(f'-------------------current_angle: {self.current_angle}')
 
     def modulate_angle(self, angle):

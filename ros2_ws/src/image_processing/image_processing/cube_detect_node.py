@@ -51,6 +51,8 @@ class CubeDetectNode(Node):
         distance_list = []
         obj_type_list = []
 
+        print(f'results detected -------------------- :\n{boxes}')
+
         for i in range(len(boxes)):
             obj_type = int(boxes.cls[i])
             coords = boxes.xyxy[i]
