@@ -29,6 +29,7 @@ class StateMachineNode(Node):
         #encoder variables
         self.encoderL = 0
         self.encoderR = 0
+        self.ENCODER_RES = 440
 
         #angle variables
         self.cur_left_speed = 0
@@ -65,7 +66,8 @@ class StateMachineNode(Node):
 
         self.cv_sub = self.create_subscription(CubeTracking, "cube_location_info", self.cv_callback, 10)
         self.encoder_sub = self.create_subscription(EncoderCounts, "encoder_info", self.encoder_callback, 10)
-        self.state_machine = self.create_timer(self.dT, self.state_machine_callback)
+        #self.state_machine = self.create_timer(self.dT, self.state_machine_callback)
+        self.test_timer = self.create_timer(self.dT, self.angle_callback)
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
         self.scan_pub = self.create_publisher(Bool, "scan_activate", 10)
 
@@ -99,6 +101,11 @@ class StateMachineNode(Node):
     def encoder_callback(self, msg: EncoderCounts):
         self.encoderL = msg.encoder1
         self.encoderR = msg.encoder2
+    
+    def angle_callback(self):
+        self.update_angle(self.dT)
+        self.motor_pub.publish(MotorCommand())
+        self.get_logger().info(f'current_angle: {self.current_angle}')
 
     def state_machine_callback(self): #called every 0.5 seconds
         deltaL, deltaR = 0,0
@@ -236,17 +243,16 @@ class StateMachineNode(Node):
         return min
     
     def update_angle(self, dT):
-        alpha_wL, alpha_wR = 1, 1
-        beta_factor = 0.4
+        #alpha_wL, alpha_wR = 1, 1
+        beta_factor = 1
         _, gyro = self.imu.get_data()
         wZ = gyro[2]
-        diff_wheel_x1 = (alpha_wR*self.cur_right_speed - alpha_wL*self.cur_left_speed)*self.WHEEL_RADIUS*dT
-        diff_wheel_x2 = (self.encoderR - self.encoderL)/440*2*math.pi*self.WHEEL_RADIUS
+        #diff_wheel_x1 = (alpha_wR*self.cur_right_speed - alpha_wL*self.cur_left_speed)*self.WHEEL_RADIUS*dT
+        diff_wheel_x = (self.encoderR - self.encoderL)/self.ENCODER_RES*2*math.pi*self.WHEEL_RADIUS
+        self.get_logger().info(f'dwx: {diff_wheel_x}')
         #print(f'Check these out:\npiece1: {diff_wheel_x1}\npiece2: {diff_wheel_x2}\nnum: {(diff_wheel_x1+diff_wheel_x2)},\ndenom: {2*self.DIAMETER},\ntotal: {(diff_wheel_x1+diff_wheel_x2)/2/self.DIAMETER}')
-        delta_theta = beta_factor*wZ*dT + (1 - beta_factor) * math.atan((diff_wheel_x1+diff_wheel_x2)/2/self.DIAMETER)
-        new = self.current_angle + delta_theta*180/math.pi #degrees
-        self.current_angle = round(self.modulate_angle(new),2)
-        #print(f'-------------------current_angle: {self.current_angle}')
+        new_angle = (1-beta_factor)*wZ*dT + beta_factor*math.atan(diff_wheel_x/self.DIAMETER)
+        self.current_angle = round(self.modulate_angle(new_angle*180/math.pi),2)#degrees
 
     def modulate_angle(self, angle):
         if angle > 0:
