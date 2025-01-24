@@ -52,12 +52,20 @@ class RavenNode(Node):
             right_speed = dc.right_speed
             right_rev=False
 
+        if dc.dt_speed < 0:
+            dt_speed = abs(dc.dt_speed)
+            dt_rev=True
+        else:
+            dt_speed = dc.dt_speed
+            dt_rev=False
+
         # print(f"Left Motor - Speed: {left_speed}, Reverse: {left_rev}")
         # print(f"Right Motor - Speed: {right_speed}, Reverse: {right_rev}")
 
         # Speed controlled:
         self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, right_speed, reverse=right_rev)
         self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, left_speed, reverse=left_rev)
+        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH3, dt_speed, reverse=dt_rev)
 
         # Torque controlled:
         # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, 100) # Make motor try to run at max speed forward

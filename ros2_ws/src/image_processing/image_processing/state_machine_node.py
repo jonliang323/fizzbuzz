@@ -55,11 +55,13 @@ class StateMachineNode(Node):
         self.first_sphere_grabbed = False
         self.red_counter = 0
         self.elevator_timer_count = 0
+        self.duck_timer_count = 0
         self.elevator_state = 'idle'
         self.angle1_elev = 0
         self.angle2_claw = 0
         self.angle3_flap = 0
         self.angle4_duck = 0
+        self.dt_speed = 0
 
         self.cv_sub = self.create_subscription(CubeTracking, "cube_location_info", self.cv_callback, 10)
         self.encoder_sub = self.create_subscription(EncoderCounts, "encoder_info", self.encoder_callback, 10)
@@ -173,12 +175,20 @@ class StateMachineNode(Node):
             deltaR = max(min(self.p_gainR * cur_align_error + self.i_gainR * self.error_integralR + self.d_gainR * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
 
             #Drive until condition is met
-            if self.target["distance"] > 2: #to within 2 cm
-                norm_speed = self.NORM_SPEED
-            else: #stop
-                norm_speed = 0
-                self.block_align_drive = False
-                self.block_intake = True
+            if self.first_sphere_grabbed:
+                if self.target["distance"] > 2: #to within 2 cm
+                    norm_speed = self.NORM_SPEED
+                else: #stop
+                    norm_speed = 0
+                    self.block_align_drive = False
+                    self.block_intake = True
+            else:
+                if self.target["distance"] > 5: #to within 5 cm
+                    norm_speed = self.NORM_SPEED   
+                else: #stop
+                    norm_speed = 0
+                    self.block_align_drive = False
+                    self.hook()
 
             self.prev_align_error = cur_align_error
 
@@ -203,6 +213,7 @@ class StateMachineNode(Node):
         #set motor speeds
         dc.left_speed = norm_speed + deltaL
         dc.right_speed = norm_speed + deltaR
+        dc.dt_speed = self.dt_speed #dumptruck motor, to add to DCCOmmand.msg
         servo.angle1_elev = self.angle1_elev
         servo.angle2_claw = self.angle2_claw
         servo.angle3_flap = self.angle3_flap
@@ -290,14 +301,31 @@ class StateMachineNode(Node):
         #activate bird when red block comes
         motor_msg = MotorCommand()
 
-        motor_msg.actuate_motors.angle4 = -90 #idk what the bird angles are
+        # motor_msg.actuate_motors.angle4 = -90 #idk what the bird angles are
+        #duck starts at an angle of -90
+        self.angle4_duck = 90
+        self.duck_timer_count+=1
+
+        if self.duck_timer_count >= 4:
+            self.angle4_duck = -90
+            self.duck_timer_count = 0
     
     #TODO: implement dumptruck
     def activate_dumptruck(self):
         motor_msg = MotorCommand()
         #some way to drive to purple wall
-        motor_msg.drive_motors.left_speed = 30 #change this, maybe add something in DCCommand.msg like dt_speed and set to 0 for everything except when dt is activated
-    
+        #motor_msg.drive_motors.left_speed = 30 #change this, maybe add something in DCCommand.msg like dt_speed and set to 0 for everything except when dt is activated
+        self.dt_speed = 30
+        time.sleep(2)
+        self.dt_speed = 0
+        time.sleep(1)
+        self.dt_speed = -30
+        time.sleep(2)
+        self.dt_speed = 0
+
+    #TODO: implement hook for first sphere
+    def hook(self):
+        pass
 
 def main(args=None):
     rclpy.init()
