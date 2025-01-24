@@ -11,10 +11,10 @@ class TestMotorNode(Node): #replaces state machine, which may be complicated to 
         self.prev_time = self.clock.now()
         self.i = 0
 
-        self.cube_loc_sub = self.create_subscription(CubeTracking, "cube_location_info", self.motor_callback, 10)
+        self.motor_control = self.create_timer(0.1, self.motor_callback)
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10) 
         
-    def motor_callback(self, msg: CubeTracking):
+    def motor_callback(self):
         #for testing:
         #DC
         speed = 0 #int(msg.distance*5/2-25) #0 -> 50 at range 10cm to 30cm
@@ -30,11 +30,9 @@ class TestMotorNode(Node): #replaces state machine, which may be complicated to 
             self.i = (self.i + 1)%2
             self.prev_time = self.clock.now()
         if self.i == 0:
-            motor_msg.actuate_motors.angle1 = -90
-            motor_msg.actuate_motors.angle2 = -40
+            motor_msg.actuate_motors.angle1_elev = -90
         else:
-            motor_msg.actuate_motors.angle1 = 90
-            motor_msg.actuate_motors.angle2 = -25
+            motor_msg.actuate_motors.angle1_elev = 90
 
         self.motor_pub.publish(motor_msg)
     
