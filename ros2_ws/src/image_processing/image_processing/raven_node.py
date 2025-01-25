@@ -1,26 +1,14 @@
 import rclpy
 from rclpy.node import Node
 from raven import Raven
-#from icm42688 import ICM42688
-#import board
 from image_processing_interfaces.msg import MotorCommand
 from image_processing_interfaces.msg import EncoderCounts
-#from image_processing_interfaces.msg import IMUInfo
 
 class RavenNode(Node):
     def __init__(self):
         super().__init__('raven_subscriber')
         self.raven_board = Raven()
-        #imu initialization
-        #spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
-
-        #while not spi.try_lock():
-            #pass
-
-        #spi.configure(baudrate=5000000)
-
-        #self.imu = ICM42688(spi)
-        #self.imu.begin()
+        self.dT = 0.1
 
         # Set motors to DIRECT
         self.raven_board.set_motor_mode(Raven.MotorChannel.CH1, Raven.MotorMode.DIRECT)
@@ -32,7 +20,8 @@ class RavenNode(Node):
         self.raven_board.set_motor_encoder(Raven.MotorChannel.CH2, 0) # Set encoder count for motor 1 to zero
 
         self.motor_sub = self.create_subscription(MotorCommand, "motor_command", self.raven_callback, 10)
-        self.encoder_pub = self.create_publisher(EncoderCounts, "encoder_info", 10)
+        self.encoder_timer = self.create_timer(self.dT, self.delta_encoder_callback)
+        self.delta_encoder_pub = self.create_publisher(EncoderCounts, "delta_encoder_info", 10)
 
     def raven_callback(self, msg: MotorCommand):
         dc = msg.drive_motors
@@ -78,10 +67,16 @@ class RavenNode(Node):
         self.raven_board.set_servo_position(Raven.ServoChannel.CH3, servo.angle3_flap, 500, 2500)
         self.raven_board.set_servo_position(Raven.ServoChannel.CH4, servo.angle4_duck, 500, 2500)
 
-        encoder_msg = EncoderCounts()
-        encoder_msg.encoder1 = self.raven_board.get_motor_encoder(Raven.MotorChannel.CH1, 0)
-        encoder_msg.encoder2 = -self.raven_board.get_motor_encoder(Raven.MotorChannel.CH2, 0)
-        self.encoder_pub.publish(encoder_msg)
+    def encoder_callback(self):
+        delta_encoder_msg = EncoderCounts()
+        delta_encoder_msg.encoder1 = self.raven_board.get_motor_encoder(Raven.MotorChannel.CH1, 0)
+        delta_encoder_msg.encoder2 = -self.raven_board.get_motor_encoder(Raven.MotorChannel.CH2, 0)
+        delta_encoder_msg.delta_time = self.dT
+
+        self.raven_board.set_motor_encoder(Raven.MotorChannel.CH1, 0) # Set encoder count for motor 1 to zero
+        self.raven_board.set_motor_encoder(Raven.MotorChannel.CH2, 0) # Set encoder count for motor 1 to zero
+
+        self.delta_encoder_pub.publish(delta_encoder_msg)
 
 
 def main(args=None):

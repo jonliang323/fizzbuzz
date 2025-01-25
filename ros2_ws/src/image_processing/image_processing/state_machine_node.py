@@ -22,13 +22,13 @@ class StateMachineNode(Node):
         self.NORM_SPEED = 50
         self.MAX_DELTA = self.MAX_SPEED - self.NORM_SPEED
         self.WHEEL_RADIUS = (3.1875/2)*0.0254 #meters
-        self.DIAMETER = 10.125*0.0254 #meters
+        self.BASE_RADIUS = 10.125/2*0.0254 #meters
         self.CLASSES = ['green','red','sphere']
 
         #cv variables
         #encoder variables
-        self.encoderL = 0
-        self.encoderR = 0
+        self.delta_encoderL = 0
+        self.delta_encoderR = 0
         self.ENCODER_RES = 440
 
         #angle variables
@@ -56,16 +56,14 @@ class StateMachineNode(Node):
         self.first_sphere_grabbed = False
         self.red_counter = 0
         self.elevator_timer_count = 0
-        self.duck_timer_count = 0
         self.elevator_state = 'idle'
         self.angle1_elev = 0
         self.angle2_claw = 0
         self.angle3_flap = 0
         self.angle4_duck = 0
-        self.dt_speed = 0
 
         self.cv_sub = self.create_subscription(CubeTracking, "cube_location_info", self.cv_callback, 10)
-        self.encoder_sub = self.create_subscription(EncoderCounts, "encoder_info", self.encoder_callback, 10)
+        self.delta_encoder_sub = self.create_subscription(EncoderCounts, "encoder_info", self.encoder_callback, 10)
         #self.state_machine = self.create_timer(self.dT, self.state_machine_callback)
         self.test_timer = self.create_timer(self.dT, self.angle_callback)
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
@@ -98,14 +96,14 @@ class StateMachineNode(Node):
         self.scan = False
 
 
-    def encoder_callback(self, msg: EncoderCounts):
-        self.encoderL = msg.encoder1
-        self.encoderR = msg.encoder2
+    def delta_encoder_callback(self, msg: EncoderCounts):
+        self.delta_encoderL = msg.encoder1
+        self.delta_encoderR = msg.encoder2
+        self.update_angle(msg.delta_time)
     
     def angle_callback(self):
         self.update_angle(self.dT)
-        self.motor_pub.publish(MotorCommand())
-        self.get_logger().info(f'current_angle: {self.current_angle}')
+        print(f'current_angle: {self.current_angle}')
 
     def state_machine_callback(self): #called every 0.5 seconds
         deltaL, deltaR = 0,0
@@ -182,20 +180,12 @@ class StateMachineNode(Node):
             deltaR = max(min(self.p_gainR * cur_align_error + self.i_gainR * self.error_integralR + self.d_gainR * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
 
             #Drive until condition is met
-            if self.first_sphere_grabbed:
-                if self.target["distance"] > 2: #to within 2 cm
-                    norm_speed = self.NORM_SPEED
-                else: #stop
-                    norm_speed = 0
-                    self.block_align_drive = False
-                    self.block_intake = True
-            else:
-                if self.target["distance"] > 5: #to within 5 cm
-                    norm_speed = self.NORM_SPEED   
-                else: #stop
-                    norm_speed = 0
-                    self.block_align_drive = False
-                    self.hook()
+            if self.target["distance"] > 2: #to within 2 cm
+                norm_speed = self.NORM_SPEED
+            else: #stop
+                norm_speed = 0
+                self.block_align_drive = False
+                self.block_intake = True
 
             self.prev_align_error = cur_align_error
 
@@ -220,7 +210,6 @@ class StateMachineNode(Node):
         #set motor speeds
         dc.left_speed = norm_speed + deltaL
         dc.right_speed = norm_speed + deltaR
-        dc.dt_speed = self.dt_speed #dumptruck motor, to add to DCCOmmand.msg
         servo.angle1_elev = self.angle1_elev
         servo.angle2_claw = self.angle2_claw
         servo.angle3_flap = self.angle3_flap
@@ -243,16 +232,13 @@ class StateMachineNode(Node):
         return min
     
     def update_angle(self, dT):
-        #alpha_wL, alpha_wR = 1, 1
-        beta_factor = 1
-        _, gyro = self.imu.get_data()
-        wZ = gyro[2]
-        #diff_wheel_x1 = (alpha_wR*self.cur_right_speed - alpha_wL*self.cur_left_speed)*self.WHEEL_RADIUS*dT
-        diff_wheel_x = (self.encoderR - self.encoderL)/self.ENCODER_RES*2*math.pi*self.WHEEL_RADIUS
-        self.get_logger().info(f'dwx: {diff_wheel_x}')
-        #print(f'Check these out:\npiece1: {diff_wheel_x1}\npiece2: {diff_wheel_x2}\nnum: {(diff_wheel_x1+diff_wheel_x2)},\ndenom: {2*self.DIAMETER},\ntotal: {(diff_wheel_x1+diff_wheel_x2)/2/self.DIAMETER}')
-        new_angle = (1-beta_factor)*wZ*dT + beta_factor*math.atan(diff_wheel_x/self.DIAMETER)
-        self.current_angle = round(self.modulate_angle(new_angle*180/math.pi),2)#degrees
+        #should be positive or negative
+        xL = self.delta_encoderL/self.ENCODER_RES*2*math.pi*self.WHEEL_RADIUS
+        xR = self.delta_encoderR/self.ENCODER_RES*2*math.pi*self.WHEEL_RADIUS
+        new_angle = (xR-xL)/(2*self.BASE_RADIUS) #degrees
+        #check if this condition can be reorganized
+        #if abs(xR) != abs(xR) additional term is added to new_angle
+        self.current_angle = round(self.modulate_angle(new_angle*180/math.pi),2)
 
     def modulate_angle(self, angle):
         if angle > 0:
@@ -307,31 +293,14 @@ class StateMachineNode(Node):
         #activate bird when red block comes
         motor_msg = MotorCommand()
 
-        # motor_msg.actuate_motors.angle4 = -90 #idk what the bird angles are
-        #duck starts at an angle of -90
-        self.angle4_duck = 90
-        self.duck_timer_count+=1
-
-        if self.duck_timer_count >= 4:
-            self.angle4_duck = -90
-            self.duck_timer_count = 0
+        motor_msg.actuate_motors.angle4 = -90 #idk what the bird angles are
     
     #TODO: implement dumptruck
     def activate_dumptruck(self):
         motor_msg = MotorCommand()
         #some way to drive to purple wall
-        #motor_msg.drive_motors.left_speed = 30 #change this, maybe add something in DCCommand.msg like dt_speed and set to 0 for everything except when dt is activated
-        self.dt_speed = 30
-        time.sleep(2)
-        self.dt_speed = 0
-        time.sleep(1)
-        self.dt_speed = -30
-        time.sleep(2)
-        self.dt_speed = 0
-
-    #TODO: implement hook for first sphere
-    def hook(self):
-        pass
+        motor_msg.drive_motors.left_speed = 30 #change this, maybe add something in DCCommand.msg like dt_speed and set to 0 for everything except when dt is activated
+    
 
 def main(args=None):
     rclpy.init()
