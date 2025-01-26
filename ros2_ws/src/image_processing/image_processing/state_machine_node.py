@@ -63,7 +63,6 @@ class StateMachineNode(Node):
         self.cv_sub = self.create_subscription(CubeTracking, "cube_location_info", self.cv_callback, 10)
         self.delta_encoder_sub = self.create_subscription(EncoderCounts, "encoder_info", self.encoder_callback, 10)
         #self.state_machine = self.create_timer(self.dT, self.state_machine_callback)
-        self.test_timer = self.create_timer(self.dT, self.angle_callback)
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
         self.scan_pub = self.create_publisher(Bool, "scan_activate", 10)
 
@@ -228,17 +227,20 @@ class StateMachineNode(Node):
         xL = self.delta_encoderL/self.ENCODER_RES*2*math.pi*self.WHEEL_RADIUS
         xR = self.delta_encoderR/self.ENCODER_RES*2*math.pi*self.WHEEL_RADIUS
         dtheta = (xR-xL)/(2*self.BASE_RADIUS) #rad
-        self.current_angle += round(self.modulate_angle(dtheta*180/math.pi),2)
+
+        # pos diff calculated before angle update
         #_primes are in rotated reference frame
         dy_prime = (xL/dtheta + self.BASE_RADIUS)*math.sin(dtheta)
         dx_prime = -dy_prime*math.tan(dtheta)
-        #rotating to inertial frame
+        #rotating to inertial frame given current angle (before update)
         theta = self.current_angle*math.pi/180
         #rotation matrix abt z, applied: [cos -sin; sin cos] * [dx_prime; dy_prime] = [dx; dy]
         #-theta is used to rotate back to inertial frame, unsimplified for readability
         dx = math.cos(-theta)*dx_prime - math.sin(-theta)*dy_prime
         dy = math.sin(-theta)*dx_prime + math.cos(-theta)*dy_prime
+
         self.current_pos = (self.current_pos[0] + dx, self.current_pos[1] + dy)
+        self.current_angle += round(self.modulate_angle(dtheta*180/math.pi),2)
 
     def modulate_angle(self, angle):
         if angle > 0:
