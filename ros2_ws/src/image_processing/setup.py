@@ -29,7 +29,7 @@ setup(
             'raven_subscriber = image_processing.raven_node:main',
             'test_motor_subscriber = image_processing.test_motor_node:main',
             'pic_subscriber = image_processing.pic_node:main',
-            'live_label_subscriber = image_processing.live_label_node:main'
+            'live_label_subscriber = image_processing.live_label_node:main',
             'test_elevator_subscriber = image_processing.test_elevator_node:main',
         ],
     },

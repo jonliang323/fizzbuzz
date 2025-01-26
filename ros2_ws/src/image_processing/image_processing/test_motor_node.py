@@ -26,13 +26,38 @@ class TestMotorNode(Node): #replaces state machine, which may be complicated to 
         motor_msg.drive_motors.right_speed = speed
         #print(motor_msg.left_speed, motor_msg.right_speed)
 
-        if (self.clock.now() - self.prev_time).nanoseconds/1e9 > 3:
-            self.i = (self.i + 1)%2
+        if (self.clock.now() - self.prev_time).nanoseconds/1e9 > 2:
+            self.i = (self.i + 1)%4
+            # self.i = (self.i + 1) % 2
             self.prev_time = self.clock.now()
         if self.i == 0:
             motor_msg.actuate_motors.angle1_elev = -90
+            motor_msg.actuate_motors.angle3_flap = -0
+            motor_msg.actuate_motors.angle2_claw = -40
+            print(f'{self.i}: elev up, flap open')
+        elif self.i == 1:
+            motor_msg.actuate_motors.angle1_elev = -90
+            motor_msg.actuate_motors.angle3_flap = -0
+            motor_msg.actuate_motors.angle2_claw = -25
+            print(f'{self.i}: claws open')
+        elif self.i == 2:
+            motor_msg.actuate_motors.angle1_elev = 90
+            motor_msg.actuate_motors.angle3_flap =-90
+            motor_msg.actuate_motors.angle2_claw = -25
+            print(f"{self.i}: elev down, flap close")
         else:
             motor_msg.actuate_motors.angle1_elev = 90
+            motor_msg.actuate_motors.angle3_flap = -90
+            motor_msg.actuate_motors.angle2_claw = -40
+            print(f"{self.i}: claws close")
+        # if self.i == 0 or self.i == 1:
+        #     motor_msg.actuate_motors.angle2_claw = -25
+        #     print(f'{self.i}: claws open')
+        # else:
+        #     motor_msg.actuate_motors.angle2_claw = -40
+        #     print(f'{self.i}: claws close')
+
+
 
         self.motor_pub.publish(motor_msg)
     
