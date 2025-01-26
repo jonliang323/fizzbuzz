@@ -79,7 +79,7 @@ class StateMachineNode(Node):
         self.imu.begin()
     
     def cv_callback(self, msg: CubeTracking):
-        print(f'Requested callback')
+        self.get_logger().info(f'Requested callback')
         #enter here when scan is true, from callback recall initiate
         distances = msg.distances
         x_centers = msg.x_centers
@@ -99,8 +99,8 @@ class StateMachineNode(Node):
         self.delta_encoderR = msg.encoder2
         #only update angle here, after encoder deltas have been sent, to be read once per cycle
         self.update_angle_and_pos()
-        print(f'current_angle: {self.current_angle}')
-        print(f'current_position: {self.current_pos}')
+        self.get_logger().info(f'current_angle: {self.current_angle}')
+        self.get_logger().info(f'current_position: {self.current_pos}')
 
     def state_machine_callback(self): #called every 0.5 seconds
         deltaL, deltaR = 0,0
