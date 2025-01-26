@@ -229,8 +229,15 @@ class StateMachineNode(Node):
         xR = self.delta_encoderR/self.ENCODER_RES*2*math.pi*self.WHEEL_RADIUS
         dtheta = (xR-xL)/(2*self.BASE_RADIUS) #rad
         self.current_angle += round(self.modulate_angle(dtheta*180/math.pi),2)
-        dy = (xL/dtheta + self.BASE_RADIUS)*math.sin(dtheta)
-        dx = -dy*math.tan(dtheta)
+        #_primes are in rotated reference frame
+        dy_prime = (xL/dtheta + self.BASE_RADIUS)*math.sin(dtheta)
+        dx_prime = -dy_prime*math.tan(dtheta)
+        #rotating to inertial frame
+        theta = self.current_angle*math.pi/180
+        #rotation matrix abt z, applied: [cos -sin; sin cos] * [dx_prime; dy_prime] = [dx; dy]
+        #-theta is used to rotate back to inertial frame, unsimplified for readability
+        dx = math.cos(-theta)*dx_prime - math.sin(-theta)*dy_prime
+        dy = math.sin(-theta)*dx_prime + math.cos(-theta)*dy_prime
         self.current_pos = (self.current_pos[0] + dx, self.current_pos[1] + dy)
 
     def modulate_angle(self, angle):
