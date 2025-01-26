@@ -67,10 +67,11 @@ class RavenNode(Node):
         self.raven_board.set_servo_position(Raven.ServoChannel.CH3, servo.angle3_flap, 500, 2500)
         self.raven_board.set_servo_position(Raven.ServoChannel.CH4, servo.angle4_duck, 500, 2500)
 
-    def encoder_callback(self):
+    def delta_encoder_callback(self):
         delta_encoder_msg = EncoderCounts()
-        delta_encoder_msg.encoder1 = self.raven_board.get_motor_encoder(Raven.MotorChannel.CH1, 0)
-        delta_encoder_msg.encoder2 = -self.raven_board.get_motor_encoder(Raven.MotorChannel.CH2, 0)
+        delta_encoder_msg.encoder1 = -self.raven_board.get_motor_encoder(Raven.MotorChannel.CH1)
+        delta_encoder_msg.encoder2 = self.raven_board.get_motor_encoder(Raven.MotorChannel.CH2)
+        # self.get_logger().info("entered encoder_callback")
         
         #Reset encoder counts
         self.raven_board.set_motor_encoder(Raven.MotorChannel.CH1, 0)

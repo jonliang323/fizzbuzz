@@ -28,22 +28,24 @@ class StateMachineNode(Node):
         #encoder variables
         self.delta_encoderL = 0
         self.delta_encoderR = 0
-        self.ENCODER_RES = 440
+        self.ENCODER_RES = 640
 
         #heading, positioning variables
         self.current_angle = 0.0
         self.turn_angle = 90
         self.current_pos = (0,0)
 
+        self.turn = True
+
         self.block_align_drive = False
-        self.prev_align_error = 0
-        self.error_integralL, self.error_integralR = 0,0
+        self.prev_error_turn = 0
+        self.error_integralL_turn, self.error_integralR_turn= 0,0
         #gains should result in critical damping, best response
-        self.p_gainL, self.i_gainL, self.d_gainL = 1,0,0
-        self.p_gainR, self.i_gainR, self.d_gainR = 1,0,0
+        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 1,0,0
+        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 1,0,0
 
         # 360 scan variables
-        self.scan_270_active = True
+        self.scan_270_active = False
         self.scan = True
         self.detected_objects = []
         self.spin_speed = 50 #30 is placeholder 
@@ -61,7 +63,7 @@ class StateMachineNode(Node):
         self.angle4_duck = 0
 
         self.cv_sub = self.create_subscription(CubeTracking, "cube_location_info", self.cv_callback, 10)
-        self.delta_encoder_sub = self.create_subscription(EncoderCounts, "encoder_info", self.encoder_callback, 10)
+        self.delta_encoder_sub = self.create_subscription(EncoderCounts, "delta_encoder_info", self.delta_encoder_callback, 10)
         #self.state_machine = self.create_timer(self.dT, self.state_machine_callback)
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
         self.scan_pub = self.create_publisher(Bool, "scan_activate", 10)
@@ -96,10 +98,11 @@ class StateMachineNode(Node):
     def delta_encoder_callback(self, msg: EncoderCounts):
         self.delta_encoderL = msg.encoder1
         self.delta_encoderR = msg.encoder2
+        # self.get_logger().info(f'delta_encoder: {self.delta_encoderL}, {self.delta_encoderR}')
         #only update angle here, after encoder deltas have been sent, to be read once per cycle
         self.update_angle_and_pos()
-        self.get_logger().info(f'current_angle: {self.current_angle}')
-        self.get_logger().info(f'current_position: {self.current_pos}')
+        # self.get_logger().info(f'current_angle: {self.current_angle}')
+        # self.get_logger().info(f'current_position: {self.current_pos}')
 
     def state_machine_callback(self): #called every 0.5 seconds
         deltaL, deltaR = 0,0
@@ -151,36 +154,43 @@ class StateMachineNode(Node):
                 #     # self.block_align_drive = True
                 #     deltaL = 0
                 #     deltaR = 0
+
             self.time_counter += 1
+        
+        if self.turn:
+            gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
+            gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
+            deltaL, deltaR = self.PID(self.turn_angle - self.current_angle, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
+            self.get_logger().info(f'deltaL, deltaR: {deltaL} {deltaR}')
 
         # PID alignment, while still or driving; cube to align to should depend on recorded angle
-        if self.block_align_drive:
-            #positive error -> turn left
-            #negative error -> turn right
-            cur_align_error = self.FOV_XY[0]//2 - self.target["center"]
-            #capped integral terms
-            self.error_integralL = max(min(self.error_integralL + cur_align_error*self.dT, self.MAX_DELTA/self.i_gainL), -self.MAX_DELTA/self.i_gainL)
-            self.error_integralR = max(min(self.error_integralR + cur_align_error*self.dT, self.MAX_DELTA/self.i_gainR), -self.MAX_DELTA/self.i_gainR)
-            error_deriv = (cur_align_error - self.prev_align_error)/self.dT
+        # if self.block_align_drive:
+        #     #positive error -> turn left
+        #     #negative error -> turn right
+        #     cur_align_error = self.FOV_XY[0]//2 - self.target["center"]
+        #     #capped integral terms
+        #     self.error_integralL = max(min(self.error_integralL + cur_align_error*self.dT, self.MAX_DELTA/self.i_gainL), -self.MAX_DELTA/self.i_gainL)
+        #     self.error_integralR = max(min(self.error_integralR + cur_align_error*self.dT, self.MAX_DELTA/self.i_gainR), -self.MAX_DELTA/self.i_gainR)
+        #     error_deriv = (cur_align_error - self.prev_align_error)/self.dT
 
-            if abs(self.error_integralL) == self.MAX_DELTA/self.i_gainL:
-                print("Left integral saturated")
-            if abs(self.error_integralR) == self.MAX_DELTA/self.i_gainR:
-                print("Right integral saturated")
+        #     if abs(self.error_integralL) == self.MAX_DELTA/self.i_gainL:
+        #         print("Left integral saturated")
+        #     if abs(self.error_integralR) == self.MAX_DELTA/self.i_gainR:
+        #         print("Right integral saturated")
             
-            #capped deltas
-            deltaL = -max(min(self.p_gainL * cur_align_error + self.i_gainL * self.error_integralL + self.d_gainL * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
-            deltaR = max(min(self.p_gainR * cur_align_error + self.i_gainR * self.error_integralR + self.d_gainR * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
+        #     #capped deltas
+        #     deltaL = -max(min(self.p_gainL * cur_align_error + self.i_gainL * self.error_integralL + self.d_gainL * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
+        #     deltaR = max(min(self.p_gainR * cur_align_error + self.i_gainR * self.error_integralR + self.d_gainR * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
 
-            #Drive until condition is met
-            if self.target["distance"] > 2: #to within 2 cm
-                norm_speed = self.NORM_SPEED
-            else: #stop
-                norm_speed = 0
-                self.block_align_drive = False
-                self.block_intake = True
+            # #Drive until condition is met
+            # if self.target["distance"] > 2: #to within 2 cm
+            #     norm_speed = self.NORM_SPEED
+            # else: #stop
+            #     norm_speed = 0
+            #     self.block_align_drive = False
+            #     self.block_intake = True
 
-            self.prev_align_error = cur_align_error
+            # self.prev_align_error = cur_align_error
 
         #TODO: block intake, elevator, bird, dumptruck
         # if self.block_intake:
@@ -230,23 +240,46 @@ class StateMachineNode(Node):
 
         # pos diff calculated before angle update
         #_primes are in rotated reference frame
-        dy_prime = (xL/dtheta + self.BASE_RADIUS)*math.sin(dtheta)
-        dx_prime = -dy_prime*math.tan(dtheta)
-        #rotating to inertial frame given current angle (before update)
-        theta = self.current_angle*math.pi/180
-        #rotation matrix abt z, applied: [cos -sin; sin cos] * [dx_prime; dy_prime] = [dx; dy]
-        #-theta is used to rotate back to inertial frame, unsimplified for readability
-        dx = math.cos(-theta)*dx_prime - math.sin(-theta)*dy_prime
-        dy = math.sin(-theta)*dx_prime + math.cos(-theta)*dy_prime
+        if dtheta != 0:  
+            dy_prime = (xL/dtheta + self.BASE_RADIUS)*math.sin(dtheta)
+            dx_prime = -dy_prime*math.tan(dtheta)
+            #rotating to inertial frame given current angle (before update)
+            theta = self.current_angle*math.pi/180
+            #rotation matrix abt z, applied: [cos -sin; sin cos] * [dx_prime; dy_prime] = [dx; dy]
+            #-theta is used to rotate back to inertial frame, unsimplified for readability
+            dx = math.cos(-theta)*dx_prime - math.sin(-theta)*dy_prime
+            dy = math.sin(-theta)*dx_prime + math.cos(-theta)*dy_prime
 
-        self.current_pos = (self.current_pos[0] + dx, self.current_pos[1] + dy)
-        self.current_angle += round(self.modulate_angle(dtheta*180/math.pi),2)
+            self.current_pos = (self.current_pos[0] - dx*(29/25), self.current_pos[1] + dy*(29/25))
+            self.current_angle = self.modulate_angle(self.current_angle + round((dtheta*180/math.pi),2))
 
     def modulate_angle(self, angle):
         if angle > 0:
             return angle%360 if angle > 360 else angle
         else:
             return -(abs(angle)%360) if abs(angle) > 360 else angle
+
+    def PID(self, cur_align_error, prev_error, cur_error_integralL, cur_error_integralR, gainsL, gainsR):
+        #positive error -> turn left
+        #negative error -> turn right
+        #capped integral terms
+        (p_gainL, i_gainL, d_gainL) = gainsL
+        (p_gainR, i_gainR, d_gainR) = gainsR
+        error_integralL = max(min(cur_error_integralL + cur_align_error*self.dT, self.MAX_DELTA/i_gainL), -self.MAX_DELTA/i_gainL)
+        error_integralR = max(min(cur_error_integralR + cur_align_error*self.dT, self.MAX_DELTA/i_gainR), -self.MAX_DELTA/i_gainR)
+        error_deriv = (cur_align_error - prev_error)/self.dT
+
+        if abs(error_integralL) == self.MAX_DELTA/i_gainL:
+            print("Left integral saturated")
+        if abs(error_integralR) == self.MAX_DELTA/i_gainR:
+            print("Right integral saturated")
+        
+        #capped deltas
+        deltaL = -max(min(p_gainL * cur_align_error + i_gainL * error_integralL + d_gainL * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
+        deltaR = max(min(p_gainR * cur_align_error + i_gainR * error_integralR + d_gainR * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
+
+        return deltaL, deltaR
+
 
     def activate_elevator(self):
         motor_msg = MotorCommand()
