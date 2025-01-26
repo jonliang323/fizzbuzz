@@ -71,10 +71,10 @@ class RavenNode(Node):
         delta_encoder_msg = EncoderCounts()
         delta_encoder_msg.encoder1 = self.raven_board.get_motor_encoder(Raven.MotorChannel.CH1, 0)
         delta_encoder_msg.encoder2 = -self.raven_board.get_motor_encoder(Raven.MotorChannel.CH2, 0)
-        delta_encoder_msg.delta_time = self.dT
-
-        self.raven_board.set_motor_encoder(Raven.MotorChannel.CH1, 0) # Set encoder count for motor 1 to zero
-        self.raven_board.set_motor_encoder(Raven.MotorChannel.CH2, 0) # Set encoder count for motor 1 to zero
+        
+        #Reset encoder counts
+        self.raven_board.set_motor_encoder(Raven.MotorChannel.CH1, 0)
+        self.raven_board.set_motor_encoder(Raven.MotorChannel.CH2, 0)
 
         self.delta_encoder_pub.publish(delta_encoder_msg)
 

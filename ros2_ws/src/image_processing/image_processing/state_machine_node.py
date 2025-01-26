@@ -3,7 +3,6 @@ from rclpy.node import Node
 from rclpy.clock import Clock
 from icm42688 import ICM42688
 import math
-import time
 import board
 import busio
 from image_processing_interfaces.msg import CubeTracking
@@ -21,8 +20,8 @@ class StateMachineNode(Node):
         self.MAX_SPEED = 100
         self.NORM_SPEED = 50
         self.MAX_DELTA = self.MAX_SPEED - self.NORM_SPEED
-        self.WHEEL_RADIUS = (3.1875/2)*0.0254 #meters
-        self.BASE_RADIUS = 10.125/2*0.0254 #meters
+        self.WHEEL_RADIUS = (3.1875/2)*2.54 #cm
+        self.BASE_RADIUS = (10.125/2)*2.54 #cm
         self.CLASSES = ['green','red','sphere']
 
         #cv variables
@@ -31,11 +30,10 @@ class StateMachineNode(Node):
         self.delta_encoderR = 0
         self.ENCODER_RES = 440
 
-        #angle variables
-        self.cur_left_speed = 0
-        self.cur_right_speed = 0
+        #heading, positioning variables
         self.current_angle = 0.0
         self.turn_angle = 90
+        self.current_pos = (0,0)
 
         self.block_align_drive = False
         self.prev_align_error = 0
@@ -99,16 +97,14 @@ class StateMachineNode(Node):
     def delta_encoder_callback(self, msg: EncoderCounts):
         self.delta_encoderL = msg.encoder1
         self.delta_encoderR = msg.encoder2
-        self.update_angle(msg.delta_time)
-    
-    def angle_callback(self):
-        self.update_angle(self.dT)
+        #only update angle here, after encoder deltas have been sent, to be read once per cycle
+        self.update_angle_and_pos()
         print(f'current_angle: {self.current_angle}')
+        print(f'current_position: {self.current_pos}')
 
     def state_machine_callback(self): #called every 0.5 seconds
         deltaL, deltaR = 0,0
         norm_speed = 0 #no decel
-        self.update_angle(self.dT)
         # motor_msg = MotorCommand()
         # dc = motor_msg.drive_motors
         # servo = motor_msg.actuate_motors
@@ -125,8 +121,6 @@ class StateMachineNode(Node):
                     self.scan = True
                     self.turn_angle += 90
             else: #scan is complete
-                # print(f'--counter: {self.time_counter}')
-                # print(f'{self.turn_angle}')
                 self.scan_270_active = False
                 deltaL = 0
                 deltaR = 0
@@ -215,8 +209,6 @@ class StateMachineNode(Node):
         servo.angle3_flap = self.angle3_flap
         servo.angle4_duck = self.angle4_duck
 
-        self.cur_left_speed = dc.left_speed
-        self.cur_right_speed = dc.right_speed
         self.motor_pub.publish(motor_msg)
 
         scan_msg = Bool()
@@ -231,14 +223,15 @@ class StateMachineNode(Node):
                 min = i
         return min
     
-    def update_angle(self, dT):
+    def update_angle_and_pos(self):
         #should be positive or negative
         xL = self.delta_encoderL/self.ENCODER_RES*2*math.pi*self.WHEEL_RADIUS
         xR = self.delta_encoderR/self.ENCODER_RES*2*math.pi*self.WHEEL_RADIUS
-        new_angle = (xR-xL)/(2*self.BASE_RADIUS) #degrees
-        #check if this condition can be reorganized
-        #if abs(xR) != abs(xR) additional term is added to new_angle
-        self.current_angle = round(self.modulate_angle(new_angle*180/math.pi),2)
+        dtheta = (xR-xL)/(2*self.BASE_RADIUS) #rad
+        self.current_angle += round(self.modulate_angle(dtheta*180/math.pi),2)
+        dy = (xL/dtheta + self.BASE_RADIUS)*math.sin(dtheta)
+        dx = -dy*math.tan(dtheta)
+        self.current_pos = (self.current_pos[0] + dx, self.current_pos[1] + dy)
 
     def modulate_angle(self, angle):
         if angle > 0:
