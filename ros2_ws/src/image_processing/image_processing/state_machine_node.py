@@ -13,13 +13,13 @@ from std_msgs.msg import Bool
 class StateMachineNode(Node):
     def __init__(self):
         super().__init__('state_machine')
-        self.dT = 0.1 #seconds
+        self.dT = 0.01 #seconds
         self.clock = Clock()
 
         self.FOV_XY = 480,680
         self.MAX_SPEED = 100
         self.NORM_SPEED = 50
-        self.MAX_DELTA = self.MAX_SPEED - self.NORM_SPEED
+        self.MAX_DELTA = 100
         self.WHEEL_RADIUS = (3.1875/2)*2.54 #cm
         self.BASE_RADIUS = (10.125/2)*2.54 #cm
         self.CLASSES = ['green','red','sphere']
@@ -41,8 +41,8 @@ class StateMachineNode(Node):
         self.prev_error_turn = 0
         self.error_integralL_turn, self.error_integralR_turn= 0,0
         #gains should result in critical damping, best response
-        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 1,0,0
-        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 1,0,0
+        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 0.1,0.01,0.01
+        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 0.1,0.01,0.01
 
         # 360 scan variables
         self.scan_270_active = False
@@ -64,7 +64,7 @@ class StateMachineNode(Node):
 
         self.cv_sub = self.create_subscription(CubeTracking, "cube_location_info", self.cv_callback, 10)
         self.delta_encoder_sub = self.create_subscription(EncoderCounts, "delta_encoder_info", self.delta_encoder_callback, 10)
-        #self.state_machine = self.create_timer(self.dT, self.state_machine_callback)
+        self.state_machine = self.create_timer(self.dT, self.state_machine_callback)
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
         self.scan_pub = self.create_publisher(Bool, "scan_activate", 10)
 
@@ -157,11 +157,12 @@ class StateMachineNode(Node):
 
             self.time_counter += 1
         
+        # self.get_logger().info("entered state_machine_callback")
         if self.turn:
             gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
             gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
             deltaL, deltaR = self.PID(self.turn_angle - self.current_angle, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
-            self.get_logger().info(f'deltaL, deltaR: {deltaL} {deltaR}')
+            # self.get_logger().info(f'deltaL, deltaR: {deltaL} {deltaR}')
 
         # PID alignment, while still or driving; cube to align to should depend on recorded angle
         # if self.block_align_drive:
@@ -211,8 +212,8 @@ class StateMachineNode(Node):
         servo = motor_msg.actuate_motors
 
         #set motor speeds
-        dc.left_speed = norm_speed + deltaL
-        dc.right_speed = norm_speed + deltaR
+        dc.left_speed = int(norm_speed + deltaL)
+        dc.right_speed = int(norm_speed + deltaR)
         servo.angle1_elev = self.angle1_elev
         servo.angle2_claw = self.angle2_claw
         servo.angle3_flap = self.angle3_flap
@@ -265,18 +266,29 @@ class StateMachineNode(Node):
         #capped integral terms
         (p_gainL, i_gainL, d_gainL) = gainsL
         (p_gainR, i_gainR, d_gainR) = gainsR
-        error_integralL = max(min(cur_error_integralL + cur_align_error*self.dT, self.MAX_DELTA/i_gainL), -self.MAX_DELTA/i_gainL)
-        error_integralR = max(min(cur_error_integralR + cur_align_error*self.dT, self.MAX_DELTA/i_gainR), -self.MAX_DELTA/i_gainR)
+        # error_integralL = max(min(cur_error_integralL + cur_align_error*self.dT, self.MAX_DELTA/i_gainL), -self.MAX_DELTA/i_gainL)
+        # error_integralR = max(min(cur_error_integralR + cur_align_error*self.dT, self.MAX_DELTA/i_gainR), -self.MAX_DELTA/i_gainR)
         error_deriv = (cur_align_error - prev_error)/self.dT
 
-        if abs(error_integralL) == self.MAX_DELTA/i_gainL:
-            print("Left integral saturated")
-        if abs(error_integralR) == self.MAX_DELTA/i_gainR:
-            print("Right integral saturated")
+        # if abs(error_integralL) == self.MAX_DELTA/i_gainL:
+        #     print("Left integral saturated")
+        # if abs(error_integralR) == self.MAX_DELTA/i_gainR:
+        #     print("Right integral saturated")
         
         #capped deltas
-        deltaL = -max(min(p_gainL * cur_align_error + i_gainL * error_integralL + d_gainL * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
-        deltaR = max(min(p_gainR * cur_align_error + i_gainR * error_integralR + d_gainR * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
+        min_L = p_gainL * cur_align_error + i_gainL  + d_gainL * error_deriv
+        # self.get_logger().info(f'min_L: {min_L}')
+        max_L = min(min_L, self.MAX_DELTA)
+        # self.get_logger().info(f'max_L: {max_L}')
+        deltaL = -max(max_L, -self.MAX_DELTA)
+        min_R = p_gainR * cur_align_error + i_gainR + d_gainR * error_deriv
+        # self.get_logger().info(f'min_R: {min_R}')
+        max_R = min(min_R, self.MAX_DELTA)
+        # self.get_logger().info(f'max_R: {max_R}')
+        deltaR = max(max_R, -self.MAX_DELTA)
+
+
+        self.get_logger().info(f"align error: {cur_align_error}")
 
         return deltaL, deltaR
 

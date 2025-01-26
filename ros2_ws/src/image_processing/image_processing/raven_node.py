@@ -8,13 +8,13 @@ class RavenNode(Node):
     def __init__(self):
         super().__init__('raven_subscriber')
         self.raven_board = Raven()
-        self.dT = 0.1
+        self.dT = 0.01
 
         # Set motors to DIRECT
         self.raven_board.set_motor_mode(Raven.MotorChannel.CH1, Raven.MotorMode.DIRECT)
         self.raven_board.set_motor_mode(Raven.MotorChannel.CH2, Raven.MotorMode.DIRECT)
-        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH1, 15) # Let the motor use 50% max torque to get to speed factor
-        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH2, 15)
+        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH1, 25) # Let the motor use 50% max torque to get to speed factor
+        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH2, 25)
 
         self.raven_board.set_motor_encoder(Raven.MotorChannel.CH1, 0) # Set encoder count for motor 1 to zero
         self.raven_board.set_motor_encoder(Raven.MotorChannel.CH2, 0) # Set encoder count for motor 1 to zero
@@ -54,7 +54,8 @@ class RavenNode(Node):
         # Speed controlled:
         self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, right_speed, reverse=right_rev)
         self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, left_speed, reverse=left_rev)
-        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH3, dt_speed, reverse=dt_rev)
+        # self.get_logger().info("motors working")
+        # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH3, dt_speed, reverse=dt_rev)
 
         # Torque controlled:
         # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, 100) # Make motor try to run at max speed forward
