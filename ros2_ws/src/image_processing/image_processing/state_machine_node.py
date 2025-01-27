@@ -25,6 +25,7 @@ class StateMachineNode(Node):
         self.WHEEL_RADIUS = (3.1875/2)*2.54 #cm
         self.BASE_RADIUS = (10.125/2)*2.54 #cm
         self.CLASSES = ['green','red','sphere']
+        self.current_stack = (0,0)
 
         #cv variables
         #encoder variables
@@ -76,13 +77,10 @@ class StateMachineNode(Node):
         self.angle3_flap = 0
         self.angle4_duck = 0
 
-<<<<<<< HEAD
 
         self.cv_sub = self.create_subscription(CubeTracking, "cube_location_info", self.cv_callback, 10)
-=======
         self.cube_info_sub = self.create_subscription(CubeTracking, "cube_info", self.scan_block_callback, 10)
         self.wall_info_sub = self.create_subscription(Int16, "wall_info", self.scan_wall_callback, 10)
->>>>>>> 4712335cec4e31c76c78c77a519e47110bd9b064
         self.delta_encoder_sub = self.create_subscription(EncoderCounts, "delta_encoder_info", self.delta_encoder_callback, 10)
         self.state_machine = self.create_timer(self.dT, self.state_machine_callback)
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
@@ -108,12 +106,13 @@ class StateMachineNode(Node):
         block_pixels = msg.block_pixels
 
         #two cases when we want to scan the blocks (run YOLO classification)
-        if self.scan_270_active:
+        if self.scan_270_active: #shouldn't this be if self.scan?
             #obj has descriptors: distance, angle, x_center, type
             if obj_types != []:
                 closest = self.find_closest_index(sizes)
                 rel_angle = int(math.atan((self.FOV_XY[0]/2 - x_centers[closest])/self.FOCAL_X)*180/math.pi)
                 closest_obj = {"size":sizes[closest], "angle":self.current_angle + rel_angle, "type":self.CLASSES[obj_types[closest]]}
+                self.current_stack = self.find_stack(closest, closest_obj)
                 self.detected_objects.append(closest_obj)
             #otherwise, detected objects is not changed
         elif self.target_drive:
@@ -232,6 +231,9 @@ class StateMachineNode(Node):
         #-> if red, flip flap, activate bird
         #-> if green, flip flap, activate elevator
         #4) scan for objects, find closest, turn to face, drive to object
+        queue = self.current_stack
+        if queue[1] is not None:
+            self.stack_counter += 1
         # if self.block_intake:
         #     if block == green or self.first_sphere_grabbed == False:
         #         self.activate_elevator()
@@ -245,19 +247,16 @@ class StateMachineNode(Node):
         # if self.red_counter == 5:
         #     self.activate_dumptruck()
 
-<<<<<<< HEAD
         if self.dumptruck:
             self.activate_dumptruck()
             self.dumptruck = False
         if self.elevator:
             self.activate_elevator()
 
-=======
         #if too close to wall, this state pops up, overrides any state controls
         if self.wall_height_screen_ratio > 0.4:
             norm_speed = -self.NORM_SPEED
             deltaL, deltaR = 0,0
->>>>>>> 4712335cec4e31c76c78c77a519e47110bd9b064
 
         motor_msg = MotorCommand()
         dc = motor_msg.drive_motors
@@ -284,6 +283,29 @@ class StateMachineNode(Node):
             if sizes[i] > sizes[min]:  
                 max_s_i = i
         return max_s_i
+    
+    def find_stack(self, index_of_closest, closest_obj):
+        #find stack of blocks
+        msg = CubeTracking()
+        stack_partner_index = None
+        for x in msg.x_centers:
+            diff = x - msg.x_centers[index_of_closest]
+            if diff < 20: #different of 20 pixels
+                stack_partner_index = msg.x_centers.index(x)
+                rel_angle = int(math.atan((self.FOV_XY[0]/2 - msg.x_centers[stack_partner_index])/self.FOCAL_X)*180/math.pi)
+                stack_partner = {"size":msg.sizes[stack_partner_index], "angle":self.current_angle + rel_angle, "type":self.CLASSES[msg.obj_types[stack_partner_index]]}
+        if stack_partner_index == None:
+            bottom = closest_obj
+            top = None
+        elif msg.y_centers[stack_partner_index] < msg.y_centers[index_of_closest]:
+            bottom = stack_partner
+            top = closest_obj
+        else:
+            bottom = closest_obj
+            top = stack_partner
+        #closest_obj = {"size":sizes[closest], "angle":self.current_angle + rel_angle, "type":self.CLASSES[obj_types[closest]]}
+        return (bottom, top)
+
     
     def update_angle_and_pos(self):
         #should be positive or negative

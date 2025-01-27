@@ -105,12 +105,9 @@ class CubeDetectNode(Node):
             cube_info_msg.obj_types = obj_type_list
             cube_info_msg.x_centers = x_center_list
             cube_info_msg.block_pixels = block_pixels
-<<<<<<< HEAD
             cube_info_msg.y_centers = y_center_list
             self.location_pub.publish(cube_info_msg)
-=======
             self.cube_pub.publish(cube_info_msg)
->>>>>>> 4712335cec4e31c76c78c77a519e47110bd9b064
     
 def main(args=None):
     rclpy.init()
