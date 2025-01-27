@@ -80,6 +80,11 @@ class RavenNode(Node):
 
         self.delta_encoder_pub.publish(delta_encoder_msg)
 
+def destroy_node(self):
+    # Stop the motors before shutting down
+    self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, 0, reverse=False)
+    self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, 0, reverse=False)
+    super().destroy_node()  # Call the parent class destroy_node
 
 def main(args=None):
     rclpy.init()
@@ -87,13 +92,6 @@ def main(args=None):
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
-
-def destroy_node(self):
-    # Stop the motors before shutting down
-    self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, 0, reverse=False)
-    self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, 0, reverse=False)
-    super().destroy_node()  # Call the parent class destroy_node
-
 
 if __name__ == "__main__":
     main()

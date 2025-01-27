@@ -16,7 +16,8 @@ class StateMachineNode(Node):
         self.dT = 0.01 #seconds
         self.clock = Clock()
 
-        self.FOV_XY = 480,680
+        self.FOV_XY = 640,480
+        self.FOCAL_X = 888.54513
         self.MAX_SPEED = 100
         self.NORM_SPEED = 50
         self.MAX_DELTA = 100
@@ -92,13 +93,15 @@ class StateMachineNode(Node):
         #enter here when scan is true, from callback recall initiate
         obj_types = msg.obj_types
         sizes = msg.sizes
+        x_centers = msg.x_centers
         block_pixels = msg.block_pixels
 
         if self.scan_270_active:
             #obj has descriptors: distance, angle, x_center, type
             if obj_types != []:
                 closest = self.find_closest_index(sizes)
-                closest_obj = {"size":sizes[closest], "angle":self.current_angle, "type":self.CLASSES[obj_types[closest]]}
+                rel_angle = int(math.atan((self.FOV_XY[0]/2 - x_centers[closest])/self.FOCAL_X)*180/math.pi)
+                closest_obj = {"size":sizes[closest], "angle":self.current_angle + rel_angle, "type":self.CLASSES[obj_types[closest]]}
                 self.detected_objects.append(closest_obj)
             #otherwise, detected objects is not changed
         elif self.target_drive:
@@ -153,6 +156,7 @@ class StateMachineNode(Node):
                     #TODO if no cubes found?
                     self.target = {"size":None, "angle":None, "type":None}
                 self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
+                self.detected_objects = []
                 self.scan_270_active = False
                 self.target_align = True
                 self.prev_error_turn = 0
@@ -199,6 +203,14 @@ class StateMachineNode(Node):
                 self.prev_error_drive = 0
 
         #TODO: block intake, elevator, bird, dumptruck
+        #0) grab sphere if not already
+        #main sequence:
+        #1) add colors to queue, bottom up
+        #2) knock over blocks
+        #3) intake blocks
+        #-> if red, flip flap, activate bird
+        #-> if green, flip flap, activate elevator
+        #4) scan for objects, find closest, turn to face, drive to object
         # if self.block_intake:
         #     if block == green or self.first_sphere_grabbed == False:
         #         self.activate_elevator()
@@ -257,7 +269,7 @@ class StateMachineNode(Node):
             dy = math.sin(-theta)*dx_prime + math.cos(-theta)*dy_prime
 
             self.current_pos = (self.current_pos[0] - dx*(29/25), self.current_pos[1] + dy*(29/25))
-            self.current_angle = self.modulate_angle(self.current_angle + round((dtheta*180/math.pi),2))
+            self.current_angle = self.modulate_angle(self.current_angle + int(dtheta*180/math.pi))
 
     def modulate_angle(self, angle):
         if angle > 0:
@@ -271,40 +283,26 @@ class StateMachineNode(Node):
         #capped integral terms
         (p_gainL, i_gainL, d_gainL) = gainsL
         (p_gainR, i_gainR, d_gainR) = gainsR
-        # error_integralL = max(min(cur_error_integralL + cur_align_error*self.dT, self.MAX_DELTA/i_gainL), -self.MAX_DELTA/i_gainL)
-        # error_integralR = max(min(cur_error_integralR + cur_align_error*self.dT, self.MAX_DELTA/i_gainR), -self.MAX_DELTA/i_gainR)
+        error_integralL = max(min(cur_error_integralL + cur_align_error*self.dT, self.MAX_DELTA/i_gainL), -self.MAX_DELTA/i_gainL)
+        error_integralR = max(min(cur_error_integralR + cur_align_error*self.dT, self.MAX_DELTA/i_gainR), -self.MAX_DELTA/i_gainR)
         error_deriv = (cur_align_error - prev_error)/self.dT
 
-        # if abs(error_integralL) == self.MAX_DELTA/i_gainL:
-        #     print("Left integral saturated")
-        # if abs(error_integralR) == self.MAX_DELTA/i_gainR:
-        #     print("Right integral saturated")
+        if abs(error_integralL) == self.MAX_DELTA/i_gainL:
+            self.get_logger().info("Left integral saturated")
+        if abs(error_integralR) == self.MAX_DELTA/i_gainR:
+            self.get_logger().info("Right integral saturated")
         
         #capped deltas
-        min_L = p_gainL * cur_align_error + i_gainL  + d_gainL * error_deriv
-        # self.get_logger().info(f'min_L: {min_L}')
-        max_L = min(min_L, self.MAX_DELTA)
-        # self.get_logger().info(f'max_L: {max_L}')
-        deltaL = -max(max_L, -self.MAX_DELTA)
-        min_R = p_gainR * cur_align_error + i_gainR + d_gainR * error_deriv
-        # self.get_logger().info(f'min_R: {min_R}')
-        max_R = min(min_R, self.MAX_DELTA)
-        # self.get_logger().info(f'max_R: {max_R}')
-        deltaR = max(max_R, -self.MAX_DELTA)
-
-
-        self.get_logger().info(f"align error: {cur_align_error}")
+        deltaL = -max(min(p_gainL * cur_align_error + i_gainL  + d_gainL * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
+        deltaR = max(min(p_gainR * cur_align_error + i_gainR + d_gainR * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
 
         return deltaL, deltaR
 
 
     def activate_elevator(self):
-        motor_msg = MotorCommand()
-
         #elevator starts: angle1 = 90 (elevator up) angle2 = -25 (claws closed) angle3 = 0 (flap open)
         self.elevator_state == 'open claws'
         self.elevator_timer_count = 0
-        
 
         if self.elevator_state == 'open claws':
             self.angle2_claw = -40  #claws open
