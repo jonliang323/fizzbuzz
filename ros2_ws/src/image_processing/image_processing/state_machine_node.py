@@ -5,11 +5,8 @@ from icm42688 import ICM42688
 import math
 import board
 import busio
-import time
-from image_processing_interfaces.msg import CubeTracking
-from image_processing_interfaces.msg import EncoderCounts
-from image_processing_interfaces.msg import MotorCommand
-from std_msgs.msg import Bool, Int16
+from image_processing_interfaces.msg import CubeTracking, EncoderCounts, MotorCommand, WallInfo
+from std_msgs.msg import Bool
 
 class StateMachineNode(Node):
     def __init__(self):
@@ -63,6 +60,7 @@ class StateMachineNode(Node):
 
         self.block_screen_ratio = 0
         self.wall_height_screen_ratio = 0
+        self.orange_tape_ratio = 0
 
         #elevator variables
         self.block_intake = False
@@ -72,19 +70,24 @@ class StateMachineNode(Node):
         self.elevator = False
         self.dumptruck=False
         self.elevator_state = 'idle'
-        self.angle1_elev = 0
+        self.angle1_duck = 0
         self.angle2_claw = 0
-        self.angle3_flap = 0
-        self.angle4_duck = 0
+        self.angle3_elev = 0
+        self.angle4_flap = 0
 
+<<<<<<< HEAD
 
         self.cv_sub = self.create_subscription(CubeTracking, "cube_location_info", self.cv_callback, 10)
         self.cube_info_sub = self.create_subscription(CubeTracking, "cube_info", self.scan_block_callback, 10)
         self.wall_info_sub = self.create_subscription(Int16, "wall_info", self.scan_wall_callback, 10)
+=======
+        self.cube_info_sub = self.create_subscription(CubeTracking, "cube_info", self.scan_block_callback, 10)
+        self.wall_info_sub = self.create_subscription(WallInfo, "wall_info", self.scan_wall_callback, 10)
+>>>>>>> a35e67be025718b231a1a6a064371125284ff474
         self.delta_encoder_sub = self.create_subscription(EncoderCounts, "delta_encoder_info", self.delta_encoder_callback, 10)
         self.state_machine = self.create_timer(self.dT, self.state_machine_callback)
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
-        self.cv_pub = self.create_publisher(Bool, "scan_blocks", 10)
+        self.cv_pub = self.create_publisher(Bool, "scan_blocks", 10) #tells cv if we want to scan blocks
 
         #imu initialization
         spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
@@ -123,8 +126,9 @@ class StateMachineNode(Node):
                 self.block_screen_ratio = 0
         self.scan_blocks = False
 
-    def scan_wall_callback(self, avg_height: Int16):
-        self.wall_height_screen_ratio = avg_height.data/self.FOV_XY[1]
+    def scan_wall_callback(self, msg: WallInfo):
+        self.wall_height_screen_ratio = msg.avg_height/self.FOV_XY[1]
+        self.orange_tape_ratio = msg.orange_tape_ratio
 
     def delta_encoder_callback(self, msg: EncoderCounts):
         self.delta_encoderL = msg.encoder1
@@ -135,7 +139,12 @@ class StateMachineNode(Node):
         # self.get_logger().info(f'current_position: {self.current_pos}')
 
     #TODO detecting wall, staying away from wall
-    #identifying divider wall, moving towards it when using dumptruck
+    #TODO identifying divider wall, moving towards it when using dumptruck
+    #TODO keep track of the number of red blocks we have in our dumptruck to know if we can get any more
+    #-> maybe we go to the center of the playing field after finding all of the stacks/red blocks
+    #-> center of playing field determined by when wall_height_screen ratio is the same all the way around
+    #-> and spin around until we see the orange wall, mark its angle, and then pid towards it/position
+    #TODO spinning in place
     def state_machine_callback(self): #called every 0.01 seconds
         deltaL, deltaR = 0,0
         norm_speed = 0 #no decel
@@ -253,7 +262,12 @@ class StateMachineNode(Node):
         if self.elevator:
             self.activate_elevator()
 
+<<<<<<< HEAD
         #if too close to wall, this state pops up, overrides any state controls
+=======
+        #default: if too close to wall, this state pops up, overrides any state controls
+        #TODO some maneuvering mechanism to get aligned with the wall
+>>>>>>> a35e67be025718b231a1a6a064371125284ff474
         if self.wall_height_screen_ratio > 0.4:
             norm_speed = -self.NORM_SPEED
             deltaL, deltaR = 0,0
@@ -265,10 +279,10 @@ class StateMachineNode(Node):
         #set motor speeds
         dc.left_speed = int(norm_speed + deltaL)
         dc.right_speed = int(norm_speed + deltaR)
-        servo.angle1_elev = self.angle1_elev
+        servo.angle1_duck = self.angle1_duck
         servo.angle2_claw = self.angle2_claw
-        servo.angle3_flap = self.angle3_flap
-        servo.angle4_duck = self.angle4_duck
+        servo.angle3_elev = self.angle3_elev
+        servo.angle4_flap = self.angle4_flap
 
         self.motor_pub.publish(motor_msg)
 
@@ -361,13 +375,13 @@ class StateMachineNode(Node):
 
             if self.elevator_state == 'open claws':
             # if self.i == 0:
-                self.angle1_elev = 90
-                self.angle3_flap = -90 #flap open...if we want default flap to be closed, we can open it above when we set block_intake to be true
+                self.angle3_elev = 90
+                self.angle4_flap = -90 #flap open...if we want default flap to be closed, we can open it above when we set block_intake to be true
                 self.angle2_claw = -45  #claws open
                 #robot should move forward at this point. 
 
                 self.elevator_timer_count += 1
-                # print(f'state: open claws ------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
+                # print(f'state: open claws ------angles: elev: {self.angle3_elev} claw: {self.angle2_claw} flap: {self.angle4_flap}')
 
                 if self.elevator_timer_count >= 200:  #wait 2 seconds
                     self.elevator_state = 'elev move down'
@@ -376,10 +390,10 @@ class StateMachineNode(Node):
 
             elif self.elevator_state == 'elev move down':
             # elif self.i == 1:
-                self.angle1_elev = -90  #elevator moves down
-                self.angle3_flap = 0    #flap closes 
+                self.angle3_elev = -90  #elevator moves down
+                self.angle4_flap = 0    #flap closes 
                 self.angle2_claw = -45
-                # print(f'state: elev moving down------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
+                # print(f'state: elev moving down------angles: elev: {self.angle3_elev} claw: {self.angle2_claw} flap: {self.angle4_flap}')
 
                 self.elevator_timer_count += 1
                 if self.elevator_timer_count >= 200:  
@@ -390,11 +404,11 @@ class StateMachineNode(Node):
             #return elevator to starting position
             elif self.elevator_state == 'close claws':
             # elif self.i == 2:
-                self.angle1_elev = -90
-                self.angle3_flap = 0 
+                self.angle3_elev = -90
+                self.angle4_flap = 0 
                 self.angle2_claw = -20  #claws close
                 self.elevator_timer_count += 1
-                # print(f'state: claws close------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
+                # print(f'state: claws close------angles: elev: {self.angle3_elev} claw: {self.angle2_claw} flap: {self.angle4_flap}')
 
                 if self.elevator_timer_count >= 200:  
                     self.elevator_state = 'elev move up'
@@ -403,11 +417,11 @@ class StateMachineNode(Node):
 
             elif self.elevator_state == 'elev move up':
             # elif self.i == 3:
-                self.angle1_elev = 90  #elevator moves up while holding block
-                self.angle3_flap = -90   #flap opens
+                self.angle3_elev = 90  #elevator moves up while holding block
+                self.angle4_flap = -90   #flap opens
                 self.angle2_claw = -20
                 self.elevator_timer_count += 1
-                # print(f'state: elev moving up------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
+                # print(f'state: elev moving up------angles: elev: {self.angle3_elev} claw: {self.angle2_claw} flap: {self.angle4_flap}')
 
                 if self.elevator_timer_count >= 200:  
                     self.elevator_state = 'idle'
@@ -416,11 +430,10 @@ class StateMachineNode(Node):
             
             if self.elevator_state == 'idle':
             # elif self.i == 4:
-                self.angle1_elev = 90  
-                self.angle3_flap = 0   
+                self.angle3_elev = 90  
+                self.angle4_flap = 0   
                 self.angle2_claw = -20
-                # print(f'state: idle ------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
-                # print(f'start angles: elev: {self.angle1_elev}, claw: {self.angle2_claw}, flap: {self.angle3_flap}')
+                # print(f'state: idle ------angles: elev: {self.angle3_elev} claw: {self.angle2_claw} flap: {self.angle4_flap}')
 
                 if self.elevator_timer_count >= 4:  #wait 2 seconds
                     self.elevator_state = 'open claws'
