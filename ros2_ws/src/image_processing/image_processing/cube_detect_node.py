@@ -55,35 +55,42 @@ class CubeDetectNode(Node):
             ##
             results = self.model.predict(cur_frame, imgsz=(480,640),verbose=False)
             boxes = results[0].boxes #1 image processed
-            x_center_list = []
-            distance_list = []
+            size_list = []
             obj_type_list = []
 
+            block_pixels = 0
+            covered = []
             #print(f'results detected -------------------- :\n{boxes}')
-
             for i in range(len(boxes)):
                 obj_type = int(boxes.cls[i])
                 coords = boxes.xyxy[i]
-                x_center = int((coords[0] + coords[2])/2)
-                # distance to cube
-                y_px = int(coords[1] - coords[3]) #from bounding box
-                h_px = cur_frame.shape[0]
-                distance = round(self.L*self.F*h_px/(self.H_MM*y_px)/10 - self.K,2) #cm
+                x1,x2 = coords[0],coords[2]
+                y1,y2 = coords[1],coords[3]
+                w = x2-x1
+                h = y2-y1
+                size = w*h
+                new_box_overlap = 0
+                for entry in covered: #finds overlap between this box and all others
+                    #overlap += self.find_box_overlap(entry,(x1,x2,y1,y2))
+                    xE1, xE2, yE1, yE2 = entry[0], entry[1], entry[2], entry[3]
+                    if x1 > xE1 and x1 < xE2 or x2 > xE1 and x2 < xE2:
+                        x_list = sorted([x1,x2,xE1,xE2])
+                        x_overlap = x_list[2]-x_list[1]
+                    if y1 > yE1 and y1 < yE2 or y2 > yE1 and y2 < yE2:
+                        y_list = sorted([y1,y2,yE1,yE2])
+                        y_overlap = y_list[2]-y_list[1]
+                    new_box_overlap += x_overlap*y_overlap
+                block_pixels += (size-new_box_overlap)
+                covered.append((x1,x2,y1,y2))
 
-                x_center_list.append(x_center)
-                distance_list.append(distance)
                 obj_type_list.append(obj_type)
-
-            #print(f"{len(boxes)} objects detected on the screen")
+                size_list.append(size)
 
             cube_info_msg = CubeTracking()
-            # print(f'x_center: {x_center_list} \n dist: {distance_list} \n obj: {obj_type_list}')
-            cube_info_msg.x_centers = x_center_list
-            cube_info_msg.distances = distance_list
+            cube_info_msg.sizes = size_list
             cube_info_msg.obj_types = obj_type_list
+            cube_info_msg.block_pixels = block_pixels
             self.location_pub.publish(cube_info_msg)
-
-
     
 def main(args=None):
     rclpy.init()

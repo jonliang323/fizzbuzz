@@ -33,23 +33,31 @@ class StateMachineNode(Node):
         #heading, positioning variables
         self.current_angle = 0.0
         self.turn_angle = 90
-        self.current_pos = (0,0)
-
-        self.turn = True
-
-        self.block_align_drive = False
-        self.prev_error_turn = 0
-        self.error_integralL_turn, self.error_integralR_turn= 0,0
-        #gains should result in critical damping, best response
-        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 0.1,0.01,0.01
-        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 0.1,0.01,0.01
+        self.current_pos = (0, 0)
 
         # 360 scan variables
         self.scan_270_active = False
         self.scan = True
         self.detected_objects = []
         self.spin_speed = 50 #30 is placeholder 
-        self.time_counter = 0
+
+        #turning state, PID
+        self.target_align = False
+        self.prev_error_turn = 0
+        self.error_integralL_turn, self.error_integralR_turn= 0,0
+        #gains should result in critical damping, best response
+        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 0.1,0.01,0.01
+        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 0.1,0.01,0.01
+
+        #turn drive state, PID
+        self.target_drive = False
+        self.prev_error_drive = 0
+        self.error_integralL_drive, self.error_integralR_drive= 0,0
+        #gains should result in critical damping, best response
+        self.p_gainL_drive, self.i_gainL_drive, self.d_gainL_drive = 0.1,0.01,0.01
+        self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive = 0.1,0.01,0.01
+
+        self.block_screen_ratio = 0
 
         #elevator variables
         self.block_intake = False
@@ -80,25 +88,31 @@ class StateMachineNode(Node):
         self.imu.begin()
     
     def cv_callback(self, msg: CubeTracking):
-        self.get_logger().info(f'Requested callback')
+        self.get_logger().info(f'Requested scan')
         #enter here when scan is true, from callback recall initiate
-        distances = msg.distances
-        x_centers = msg.x_centers
-        obj_type = msg.obj_types
+        obj_types = msg.obj_types
+        sizes = msg.sizes
+        block_pixels = msg.block_pixels
 
-        #obj has descriptors: distance, angle, x_center, type
-        if distances != []:
-            closest = self.find_closest_index(distances)
-            closest_obj = {"distance":distances[closest], "angle":self.current_angle, "center":x_centers[closest], "type":self.CLASSES[obj_type[closest]]}
-            self.detected_objects.append(closest_obj)
-        #otherwise, detected objects is not changed
+        if self.scan_270_active:
+            #obj has descriptors: distance, angle, x_center, type
+            if obj_types != []:
+                closest = self.find_closest_index(sizes)
+                closest_obj = {"size":sizes[closest], "angle":self.current_angle, "type":self.CLASSES[obj_types[closest]]}
+                self.detected_objects.append(closest_obj)
+            #otherwise, detected objects is not changed
+        elif self.target_drive:
+            #find block screen ratio
+            if obj_types != []:
+                self.block_screen_ratio = block_pixels/(self.FOV_XY[0]*self.FOV_XY[1])
+            else:
+                self.block_screen_ratio = 0
         self.scan = False
 
 
     def delta_encoder_callback(self, msg: EncoderCounts):
         self.delta_encoderL = msg.encoder1
         self.delta_encoderR = msg.encoder2
-        # self.get_logger().info(f'delta_encoder: {self.delta_encoderL}, {self.delta_encoderR}')
         #only update angle here, after encoder deltas have been sent, to be read once per cycle
         self.update_angle_and_pos()
         # self.get_logger().info(f'current_angle: {self.current_angle}')
@@ -107,91 +121,82 @@ class StateMachineNode(Node):
     def state_machine_callback(self): #called every 0.5 seconds
         deltaL, deltaR = 0,0
         norm_speed = 0 #no decel
-        # motor_msg = MotorCommand()
-        # dc = motor_msg.drive_motors
-        # servo = motor_msg.actuate_motors
         
         if self.scan_270_active:
             #spins full 270
-            if self.turn_angle <= 270:# and self.time_counter < 20: #may want to outsource PID function to call anytime we turn
+            if self.turn_angle <= 270:
                 #turns 270 degrees
                 #scan is true
-                if not self.scan and self.current_angle < self.turn_angle: #ccw turn, + angle
-                    deltaL = 0#-self.spin_speed
-                    deltaR = 0#self.spin_speed
-                elif not self.scan: #self.current_angle matched self.turn_angle
+                if not self.scan and abs(self.current_angle - self.turn_angle) > 5: #ccw turn, + angle
+                    gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
+                    gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
+
+                    angle_err = self.turn_angle - self.current_angle
+                    if angle_err > 180:
+                        angle_err -= 360
+                    elif angle_err < -180:
+                        angle_err += 360
+                    deltaL, deltaR = self.PID(angle_err, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
+                    self.prev_err_turn = angle_err
+                elif not self.scan: #self.current_angle matched self.turn_angle, still no scan
                     self.scan = True
                     self.turn_angle += 90
             else: #scan is complete
-                self.scan_270_active = False
                 deltaL = 0
                 deltaR = 0
+                #process list
                 if len(self.detected_objects) > 0:
-                    closest = self.find_closest_index([obj["distance"] for obj in self.detected_objects])
+                    closest = self.find_closest_index([obj["size"] for obj in self.detected_objects])
                     self.target = self.detected_objects[closest]
+                    self.get_logger().info(f'\n\n scan complete, closest object is {self.target["type"]},\nat an angle of {self.target["angle"]}')
                 else:
-                    self.target = {"distance":None, "angle":0, "center":None, "type":None}
-                print(f'\n\n scan complete, closest object is {self.target["type"]},\n{self.target["distance"]} away at an angle of {self.target["angle"]} \n\n\n\n')
-                print(f'\n\n all detected_objects: {self.detected_objects} \n\n\n\n')
-                #*** turn to face self.target["angle"] here:
-                #*******
- 
-                # angle_diff = self.target["angle"] - self.current_angle
-                
-                # if angle_diff > 180:
-                #     angle_diff -= 360
-                # elif angle_diff < -180:
-                #     angle_diff += 360
-                
-                # if abs(angle_diff) > 5:  #error of 5(?) degrees
-                #     if angle_diff > 0:
-                #         deltaL = -self.spin_speed
-                #         deltaR = self.spin_speed
-                #     else:
-                #         deltaL = self.spin_speed
-                #         deltaR = -self.spin_speed
-                # else:
-                #     # self.block_align_drive = True
-                #     deltaL = 0
-                #     deltaR = 0
+                    #TODO if no cubes found?
+                    self.target = {"size":None, "angle":None, "type":None}
+                self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
+                self.scan_270_active = False
+                self.target_align = True
+                self.prev_error_turn = 0
 
-            self.time_counter += 1
-        
-        # self.get_logger().info("entered state_machine_callback")
-        if self.turn:
-            gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
-            gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
-            deltaL, deltaR = self.PID(self.turn_angle - self.current_angle, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
-            # self.get_logger().info(f'deltaL, deltaR: {deltaL} {deltaR}')
+        if self.target_align:
+            if abs(self.target['angle'] - self.current_angle) > 5:
+                #*** turn to face self.target["angle"] here: 
+                gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
+                gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
+
+                angle_err = self.target['angle'] - self.current_angle
+                if angle_err > 180:
+                    angle_err -= 360
+                elif angle_err < -180:
+                    angle_err += 360
+                deltaL, deltaR = self.PID(angle_err, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
+                self.prev_err_turn = angle_err
+            else:
+                #constant scan for cube -> find % cube of screen -> have time delay? sparse scanning
+                self.scan = True
+                self.target_align = False
+                self.target_drive = True
+                self.prev_error_turn = 0
 
         # PID alignment, while still or driving; cube to align to should depend on recorded angle
-        # if self.block_align_drive:
-        #     #positive error -> turn left
-        #     #negative error -> turn right
-        #     cur_align_error = self.FOV_XY[0]//2 - self.target["center"]
-        #     #capped integral terms
-        #     self.error_integralL = max(min(self.error_integralL + cur_align_error*self.dT, self.MAX_DELTA/self.i_gainL), -self.MAX_DELTA/self.i_gainL)
-        #     self.error_integralR = max(min(self.error_integralR + cur_align_error*self.dT, self.MAX_DELTA/self.i_gainR), -self.MAX_DELTA/self.i_gainR)
-        #     error_deriv = (cur_align_error - self.prev_align_error)/self.dT
+        if self.target_drive:
+            self.get_logger().info(f'block_screen_ratio: {self.block_screen_ratio}')
+            if (self.block_screen_ratio < 0.8):
+                gainsL = (self.p_gainL_drive, self.i_gainL_drive, self.d_gainL_drive)
+                gainsR = (self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive)
 
-        #     if abs(self.error_integralL) == self.MAX_DELTA/self.i_gainL:
-        #         print("Left integral saturated")
-        #     if abs(self.error_integralR) == self.MAX_DELTA/self.i_gainR:
-        #         print("Right integral saturated")
-            
-        #     #capped deltas
-        #     deltaL = -max(min(self.p_gainL * cur_align_error + self.i_gainL * self.error_integralL + self.d_gainL * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
-        #     deltaR = max(min(self.p_gainR * cur_align_error + self.i_gainR * self.error_integralR + self.d_gainR * error_deriv, self.MAX_DELTA), -self.MAX_DELTA)
-
-            # #Drive until condition is met
-            # if self.target["distance"] > 2: #to within 2 cm
-            #     norm_speed = self.NORM_SPEED
-            # else: #stop
-            #     norm_speed = 0
-            #     self.block_align_drive = False
-            #     self.block_intake = True
-
-            # self.prev_align_error = cur_align_error
+                angle_err = self.target['angle'] - self.current_angle
+                if angle_err > 180:
+                    angle_err -= 360
+                elif angle_err < -180:
+                    angle_err += 360
+                deltaL, deltaR = self.PID(angle_err, self.prev_error_drive, self.error_integralL_drive, self.error_integralR_drive, gainsL, gainsR)
+                norm_speed = self.NORM_SPEED
+                self.prev_err_drive = angle_err
+            else:
+                norm_speed = 0
+                self.target_drive = False
+                self.block_intake = True
+                self.prev_error_drive = 0
 
         #TODO: block intake, elevator, bird, dumptruck
         # if self.block_intake:
@@ -225,13 +230,13 @@ class StateMachineNode(Node):
         scan_msg.data = self.scan
         self.scan_pub.publish(scan_msg)
     
-    def find_closest_index(self, distances):
-        #find closest distance index
-        min = 0
-        for i in range(1, len(distances)): #detected_objects is [type, distance, angle of view]
-            if distances[i] < distances[min]:  
-                min = i
-        return min
+    def find_closest_index(self, sizes):
+        #find closest distance index (largest size)
+        max_s_i = 0
+        for i in range(1, len(sizes)):
+            if sizes[i] > sizes[min]:  
+                max_s_i = i
+        return max_s_i
     
     def update_angle_and_pos(self):
         #should be positive or negative
