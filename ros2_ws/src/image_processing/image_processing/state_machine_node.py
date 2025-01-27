@@ -69,10 +69,10 @@ class StateMachineNode(Node):
         self.elevator = False
         self.dumptruck=False
         self.elevator_state = 'idle'
-        self.angle1_elev = 0
+        self.angle1_duck = 0
         self.angle2_claw = 0
-        self.angle3_flap = 0
-        self.angle4_duck = 0
+        self.angle3_elev = 0
+        self.angle4_flap = 0
 
         self.cube_info_sub = self.create_subscription(CubeTracking, "cube_info", self.scan_block_callback, 10)
         self.wall_info_sub = self.create_subscription(WallInfo, "wall_info", self.scan_wall_callback, 10)
@@ -263,10 +263,10 @@ class StateMachineNode(Node):
         #set motor speeds
         dc.left_speed = int(norm_speed + deltaL)
         dc.right_speed = int(norm_speed + deltaR)
-        servo.angle1_elev = self.angle1_elev
+        servo.angle1_duck = self.angle1_duck
         servo.angle2_claw = self.angle2_claw
-        servo.angle3_flap = self.angle3_flap
-        servo.angle4_duck = self.angle4_duck
+        servo.angle3_elev = self.angle3_elev
+        servo.angle4_flap = self.angle4_flap
 
         self.motor_pub.publish(motor_msg)
 
@@ -336,13 +336,13 @@ class StateMachineNode(Node):
 
             if self.elevator_state == 'open claws':
             # if self.i == 0:
-                self.angle1_elev = 90
-                self.angle3_flap = -90 #flap open...if we want default flap to be closed, we can open it above when we set block_intake to be true
+                self.angle3_elev = 90
+                self.angle4_flap = -90 #flap open...if we want default flap to be closed, we can open it above when we set block_intake to be true
                 self.angle2_claw = -45  #claws open
                 #robot should move forward at this point. 
 
                 self.elevator_timer_count += 1
-                # print(f'state: open claws ------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
+                # print(f'state: open claws ------angles: elev: {self.angle3_elev} claw: {self.angle2_claw} flap: {self.angle4_flap}')
 
                 if self.elevator_timer_count >= 200:  #wait 2 seconds
                     self.elevator_state = 'elev move down'
@@ -351,10 +351,10 @@ class StateMachineNode(Node):
 
             elif self.elevator_state == 'elev move down':
             # elif self.i == 1:
-                self.angle1_elev = -90  #elevator moves down
-                self.angle3_flap = 0    #flap closes 
+                self.angle3_elev = -90  #elevator moves down
+                self.angle4_flap = 0    #flap closes 
                 self.angle2_claw = -45
-                # print(f'state: elev moving down------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
+                # print(f'state: elev moving down------angles: elev: {self.angle3_elev} claw: {self.angle2_claw} flap: {self.angle4_flap}')
 
                 self.elevator_timer_count += 1
                 if self.elevator_timer_count >= 200:  
@@ -365,11 +365,11 @@ class StateMachineNode(Node):
             #return elevator to starting position
             elif self.elevator_state == 'close claws':
             # elif self.i == 2:
-                self.angle1_elev = -90
-                self.angle3_flap = 0 
+                self.angle3_elev = -90
+                self.angle4_flap = 0 
                 self.angle2_claw = -20  #claws close
                 self.elevator_timer_count += 1
-                # print(f'state: claws close------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
+                # print(f'state: claws close------angles: elev: {self.angle3_elev} claw: {self.angle2_claw} flap: {self.angle4_flap}')
 
                 if self.elevator_timer_count >= 200:  
                     self.elevator_state = 'elev move up'
@@ -378,11 +378,11 @@ class StateMachineNode(Node):
 
             elif self.elevator_state == 'elev move up':
             # elif self.i == 3:
-                self.angle1_elev = 90  #elevator moves up while holding block
-                self.angle3_flap = -90   #flap opens
+                self.angle3_elev = 90  #elevator moves up while holding block
+                self.angle4_flap = -90   #flap opens
                 self.angle2_claw = -20
                 self.elevator_timer_count += 1
-                # print(f'state: elev moving up------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
+                # print(f'state: elev moving up------angles: elev: {self.angle3_elev} claw: {self.angle2_claw} flap: {self.angle4_flap}')
 
                 if self.elevator_timer_count >= 200:  
                     self.elevator_state = 'idle'
@@ -391,11 +391,10 @@ class StateMachineNode(Node):
             
             if self.elevator_state == 'idle':
             # elif self.i == 4:
-                self.angle1_elev = 90  
-                self.angle3_flap = 0   
+                self.angle3_elev = 90  
+                self.angle4_flap = 0   
                 self.angle2_claw = -20
-                # print(f'state: idle ------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
-                # print(f'start angles: elev: {self.angle1_elev}, claw: {self.angle2_claw}, flap: {self.angle3_flap}')
+                # print(f'state: idle ------angles: elev: {self.angle3_elev} claw: {self.angle2_claw} flap: {self.angle4_flap}')
 
                 if self.elevator_timer_count >= 4:  #wait 2 seconds
                     self.elevator_state = 'open claws'
