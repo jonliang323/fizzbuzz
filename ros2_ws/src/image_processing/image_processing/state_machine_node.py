@@ -38,7 +38,8 @@ class StateMachineNode(Node):
         self.scan_270_active = False
         self.scan_blocks = True
         self.detected_objects = []
-        self.spin_speed = 50 #30 is placeholder 
+        self.spin_speed = 50 #30 is placeholder
+        self.stack_counter = 0
 
         #turning state, PID
         self.target_align = False
@@ -65,6 +66,8 @@ class StateMachineNode(Node):
         self.first_sphere_grabbed = False
         self.red_counter = 0
         self.elevator_timer_count = 0
+        self.elevator = False
+        self.dumptruck=False
         self.elevator_state = 'idle'
         self.angle1_elev = 0
         self.angle2_claw = 0
@@ -72,11 +75,11 @@ class StateMachineNode(Node):
         self.angle4_duck = 0
 
         self.cube_info_sub = self.create_subscription(CubeTracking, "cube_info", self.scan_block_callback, 10)
-        self.wall_info_sub = self.create_subscription(Int16, "wall_info", self.scan_wall_callback, 10)
+        self.wall_info_sub = self.create_subscription(WallInfo, "wall_info", self.scan_wall_callback, 10)
         self.delta_encoder_sub = self.create_subscription(EncoderCounts, "delta_encoder_info", self.delta_encoder_callback, 10)
         self.state_machine = self.create_timer(self.dT, self.state_machine_callback)
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
-        self.cv_pub = self.create_publisher(Bool, "scan_blocks", 10)
+        self.cv_pub = self.create_publisher(Bool, "scan_blocks", 10) #tells cv if we want to scan blocks
 
         #imu initialization
         spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
@@ -164,14 +167,19 @@ class StateMachineNode(Node):
                     closest = self.find_closest_index([obj["size"] for obj in self.detected_objects])
                     self.target = self.detected_objects[closest]
                     self.get_logger().info(f'\n\n scan complete, closest object is {self.target["type"]},\nat an angle of {self.target["angle"]}')
+                    self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
+                    self.detected_objects = []
+                    self.scan_270_active = False
+                    self.target_align = True
+                    self.prev_error_turn = 0
+                elif len(self.detected_objects) == 0 and self.stack_counter < 5:
+                    #TODO: if no cubes found while there are still cubes to be found --> scan again
+                    self.turn_angle = 0
+                    self.scan = False
                 else:
-                    #TODO if no cubes found?
-                    self.target = {"size":None, "angle":None, "type":None}
-                self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
-                self.detected_objects = []
-                self.scan_270_active = False
-                self.target_align = True
-                self.prev_error_turn = 0
+                    self.dumptruck=True
+
+                
 
         if self.target_align:
             if abs(self.target['angle'] - self.current_angle) > 5:
@@ -235,6 +243,12 @@ class StateMachineNode(Node):
 
         # if self.red_counter == 5:
         #     self.activate_dumptruck()
+
+        if self.dumptruck:
+            self.activate_dumptruck()
+            self.dumptruck = False
+        if self.elevator:
+            self.activate_elevator()
 
         #default: if too close to wall, this state pops up, overrides any state controls
         #TODO some maneuvering mechanism to get aligned with the wall
@@ -318,43 +332,77 @@ class StateMachineNode(Node):
 
 
     def activate_elevator(self):
-        #elevator starts: angle1 = 90 (elevator up) angle2 = -25 (claws closed) angle3 = 0 (flap open)
-        self.elevator_state == 'open claws'
-        self.elevator_timer_count = 0
+        if self.elevator == True:      
 
-        if self.elevator_state == 'open claws':
-            self.angle2_claw = -40  #claws open
-            self.elevator_timer_count += 1
+            if self.elevator_state == 'open claws':
+            # if self.i == 0:
+                self.angle1_elev = 90
+                self.angle3_flap = -90 #flap open...if we want default flap to be closed, we can open it above when we set block_intake to be true
+                self.angle2_claw = -45  #claws open
+                #robot should move forward at this point. 
 
-            if self.elevator_timer_count >= 4:  #wait 2 seconds
-                self.elevator_state = 'elev move down'
-                self.elevator_timer_count = 0
+                self.elevator_timer_count += 1
+                # print(f'state: open claws ------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
 
-        elif self.elevator_state == 'elev move down':
-            self.angle1_elev = -90  #elevator moves down
-            self.angle3_flap = 90   #flap closes
+                if self.elevator_timer_count >= 200:  #wait 2 seconds
+                    self.elevator_state = 'elev move down'
+                    # print(f'state going to: {self.elevator_state}')
+                    self.elevator_timer_count = 0
 
-            self.elevator_timer_count += 1
-            if self.elevator_timer_count >= 4:  
-                self.elevator_state = 'close claws'
-                self.elevator_timer_count = 0
+            elif self.elevator_state == 'elev move down':
+            # elif self.i == 1:
+                self.angle1_elev = -90  #elevator moves down
+                self.angle3_flap = 0    #flap closes 
+                self.angle2_claw = -45
+                # print(f'state: elev moving down------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
 
-        #return elevator to starting position
-        elif self.elevator_state == 'close claws':
-            self.angle2_claw = -25  #claws close
-            self.elevator_timer_count += 1
-            if self.elevator_timer_count >= 4:  
-                self.elevator_state = 'elev move up'
-                self.elevator_timer_count = 0
+                self.elevator_timer_count += 1
+                if self.elevator_timer_count >= 200:  
+                    self.elevator_state = 'close claws'
+                    # print(f'state going to: {self.elevator_state}')
+                    self.elevator_timer_count = 0
 
-        elif self.elevator_state == 'elev move up':
-            self.angle1_elev = -90  #elevator moves up while holding block
-            self.angle3_flap = 90   #flap opens, ready for next block
-            self.elevator_timer_count += 1
+            #return elevator to starting position
+            elif self.elevator_state == 'close claws':
+            # elif self.i == 2:
+                self.angle1_elev = -90
+                self.angle3_flap = 0 
+                self.angle2_claw = -20  #claws close
+                self.elevator_timer_count += 1
+                # print(f'state: claws close------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
 
-            if self.elevator_timer_count >= 4:  
-                self.elevator_state = 'idle'
-                self.elevator_timer_count = 0
+                if self.elevator_timer_count >= 200:  
+                    self.elevator_state = 'elev move up'
+                    # print(f'state going to: {self.elevator_state}')
+                    self.elevator_timer_count = 0
+
+            elif self.elevator_state == 'elev move up':
+            # elif self.i == 3:
+                self.angle1_elev = 90  #elevator moves up while holding block
+                self.angle3_flap = -90   #flap opens
+                self.angle2_claw = -20
+                self.elevator_timer_count += 1
+                # print(f'state: elev moving up------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
+
+                if self.elevator_timer_count >= 200:  
+                    self.elevator_state = 'idle'
+                    # print(f'state going to: {self.elevator_state}')
+                    self.elevator_timer_count = 0
+            
+            if self.elevator_state == 'idle':
+            # elif self.i == 4:
+                self.angle1_elev = 90  
+                self.angle3_flap = 0   
+                self.angle2_claw = -20
+                # print(f'state: idle ------angles: elev: {self.angle1_elev} claw: {self.angle2_claw} flap: {self.angle3_flap}')
+                # print(f'start angles: elev: {self.angle1_elev}, claw: {self.angle2_claw}, flap: {self.angle3_flap}')
+
+                if self.elevator_timer_count >= 4:  #wait 2 seconds
+                    self.elevator_state = 'open claws'
+                    # print(f'state going to: {self.elevator_state}')
+                    self.elevator_timer_count = 0
+                self.elevator = False
+
         
     #TODO: implement bird
     def activate_bird(self):
@@ -362,13 +410,38 @@ class StateMachineNode(Node):
         motor_msg = MotorCommand()
 
         motor_msg.actuate_motors.angle4 = -90 #idk what the bird angles are
+        time.sleep(1)
+        motor_msg.actuate_motors.angle4 = 90
     
-    #TODO: implement dumptruck
+    #
+    # TODO: implement dumptruck
     def activate_dumptruck(self):
         motor_msg = MotorCommand()
         #some way to drive to purple wall
-        motor_msg.drive_motors.left_speed = 30 #change this, maybe add something in DCCommand.msg like dt_speed and set to 0 for everything except when dt is activated
-    
+        motor_msg.drive_motors.dt_speed = 30 
+        time.sleep(1)
+        motor_msg.drive_motors.dt_speed = 0
+        time.sleep(1)
+        motor_msg.drive_motors.dt_speed = -30
+        time.sleep(1)
+        motor_msg.drive_motors.dt_speed = 0
+
+    def activate_crook(self):
+        motor_msg = MotorCommand()
+        motor_msg.dt_speed = -10
+        self.elevator_timer_count += 1
+
+        if self.elevator_timer_count >= 100: #1 second
+            motor_msg.dt_speed = 0
+            motor_msg.left_speed = -10
+            motor_msg.right_speed = -10
+        if self.elevator_timer_count >= 150: #.5 sec
+            motor_msg.left_speed = 0
+            motor_msg.right_speed = 0
+            self.activate_elevator()
+
+
+
 
 def main(args=None):
     rclpy.init()
