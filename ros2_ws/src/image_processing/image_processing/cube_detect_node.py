@@ -126,7 +126,6 @@ class CubeDetectNode(Node):
             cube_info_msg.x_centers = x_center_list
             cube_info_msg.block_pixels = block_pixels
             cube_info_msg.y_centers = y_center_list
-            self.location_pub.publish(cube_info_msg)
             self.cube_pub.publish(cube_info_msg)
     
 def main(args=None):

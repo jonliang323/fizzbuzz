@@ -75,15 +75,8 @@ class StateMachineNode(Node):
         self.angle3_elev = 0
         self.angle4_flap = 0
 
-<<<<<<< HEAD
-
-        self.cv_sub = self.create_subscription(CubeTracking, "cube_location_info", self.cv_callback, 10)
-        self.cube_info_sub = self.create_subscription(CubeTracking, "cube_info", self.scan_block_callback, 10)
-        self.wall_info_sub = self.create_subscription(Int16, "wall_info", self.scan_wall_callback, 10)
-=======
         self.cube_info_sub = self.create_subscription(CubeTracking, "cube_info", self.scan_block_callback, 10)
         self.wall_info_sub = self.create_subscription(WallInfo, "wall_info", self.scan_wall_callback, 10)
->>>>>>> a35e67be025718b231a1a6a064371125284ff474
         self.delta_encoder_sub = self.create_subscription(EncoderCounts, "delta_encoder_info", self.delta_encoder_callback, 10)
         self.state_machine = self.create_timer(self.dT, self.state_machine_callback)
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
@@ -262,12 +255,8 @@ class StateMachineNode(Node):
         if self.elevator:
             self.activate_elevator()
 
-<<<<<<< HEAD
-        #if too close to wall, this state pops up, overrides any state controls
-=======
         #default: if too close to wall, this state pops up, overrides any state controls
         #TODO some maneuvering mechanism to get aligned with the wall
->>>>>>> a35e67be025718b231a1a6a064371125284ff474
         if self.wall_height_screen_ratio > 0.4:
             norm_speed = -self.NORM_SPEED
             deltaL, deltaR = 0,0
