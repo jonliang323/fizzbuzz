@@ -15,6 +15,7 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   msg/CubeTracking.msg
+  msg/WallInfo.msg
   msg/MotorCommand.msg
   msg/DCCommand.msg
   msg/ServoCommand.msg

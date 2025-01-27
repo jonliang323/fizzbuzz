@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
-from image_processing_interfaces.msg import CubeTracking 
+from image_processing_interfaces.msg import CubeTracking, WallInfo
 from std_msgs.msg import Bool, Int16
 import cv2
 from cv_bridge import CvBridge
@@ -34,28 +34,48 @@ class CubeDetectNode(Node):
         cur_frame = self.bridge.compressed_imgmsg_to_cv2(self.frame, "bgr8")
         #preprocess to get rid of pixels above blue tape
         hsv = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2HSV)
-        mask = cv2.inRange( #output b and w mask where white pixels are in range
+        #Blue processing
+        blue_mask = cv2.inRange( #output b and w mask, w pixels are blue
             hsv,
             np.array([int(190/2),int(0.5*255),int(0.1*255)]), #min hsv blue 228 60 20
             np.array([int(240/2),int(8*255),int(0.5*255)]), #max hsv blue
         )
-        temp_bl = np.where(mask == 255) #tuple of row col lists
-        if temp_bl == []:
+        blue_temp = np.where(blue_mask == 255) #tuple of row col lists
+        if blue_temp == []:
             blue_locs = [(0,0)] #default, would clear top left corner if no blue detected
         else:
-            blue_locs = sorted(list(zip(temp_bl[0],temp_bl[1])), key=lambda x:(x[1],x[0])) #sort (row, col) locs by col, then row
+            blue_locs = list(zip(blue_temp[0],blue_temp[1],['b']*len(blue_temp[0])))
+        #Orange processing
+        orange_mask = cv2.inRange( #output b and w mask, w pixels are orange
+            hsv,
+            np.array([int(190/2),int(0.5*255),int(0.1*255)]), #min hsv orange
+            np.array([int(240/2),int(8*255),int(0.5*255)]), #max hsv orange
+        )
+        orange_temp = np.where(orange_mask == 255) #tuple of row col lists
+        if orange_temp == []:
+            orange_locs = []
+        else:
+            orange_locs = list(zip(orange_temp[0],orange_temp[1],['o']*len(orange_temp[0])))
+        
+        all_locs = sorted(blue_locs + orange_locs, key=lambda x:(x[1],x[0])) #sort (row, col) locs by col, then row
         col = 0
-        #find average pixel boundary height
+        #find average pixel boundary height (for orange + blue combined)
         avg_boundary_pixel = 0
-        #finds maximum blue row values associated to each col, then clears image above that row
-        for i in range(len(blue_locs)):
-            if i == len(blue_locs) - 1 or blue_locs[i+1][1] != col: #found transition to next col, or last col
-                cur_frame[:blue_locs[i][0],col] = (0,0,0)
-                avg_pixel_boundary += blue_locs[i][0]
+        #finds maximum orange,blue row values associated to each col, then clears image above that row
+        for i in range(len(all_locs)):
+            if i == len(all_locs) - 1 or all_locs[i+1][1] != col: #found transition to next col, or last col
+                max_masked_loc = all_locs[i]
+                if max_masked_loc[2] == 'b':
+                    cur_frame[:max_masked_loc[0],col] = (0,0,0)
+                else: # == 'o' for visual debugging
+                    cur_frame[:max_masked_loc[0],col] = (255,255,255)
+                avg_pixel_boundary += max_masked_loc[0]
                 col += 1
-        avg_boundary_pixel /= col
-        wall_info_msg = Int16()
-        wall_info_msg.data = avg_boundary_pixel
+        avg_boundary_pixel = avg_boundary_pixel/col
+
+        wall_info_msg = WallInfo()
+        wall_info_msg.orange_tape_ratio = len(orange_locs)/len(all_locs)
+        wall_info_msg.avg_height = avg_boundary_pixel
         self.wall_info_pub.publish(wall_info_msg)
 
         if scan_blocks: #if we want to look for blocks too

@@ -5,10 +5,8 @@ from icm42688 import ICM42688
 import math
 import board
 import busio
-from image_processing_interfaces.msg import CubeTracking
-from image_processing_interfaces.msg import EncoderCounts
-from image_processing_interfaces.msg import MotorCommand
-from std_msgs.msg import Bool, Int16
+from image_processing_interfaces.msg import CubeTracking, EncoderCounts, MotorCommand, WallInfo
+from std_msgs.msg import Bool
 
 class StateMachineNode(Node):
     def __init__(self):
@@ -60,6 +58,7 @@ class StateMachineNode(Node):
 
         self.block_screen_ratio = 0
         self.wall_height_screen_ratio = 0
+        self.orange_tape_ratio = 0
 
         #elevator variables
         self.block_intake = False
@@ -115,8 +114,9 @@ class StateMachineNode(Node):
                 self.block_screen_ratio = 0
         self.scan_blocks = False
 
-    def scan_wall_callback(self, avg_height: Int16):
-        self.wall_height_screen_ratio = avg_height.data/self.FOV_XY[1]
+    def scan_wall_callback(self, msg: WallInfo):
+        self.wall_height_screen_ratio = msg.avg_height/self.FOV_XY[1]
+        self.orange_tape_ratio = msg.orange_tape_ratio
 
     def delta_encoder_callback(self, msg: EncoderCounts):
         self.delta_encoderL = msg.encoder1
@@ -127,7 +127,12 @@ class StateMachineNode(Node):
         # self.get_logger().info(f'current_position: {self.current_pos}')
 
     #TODO detecting wall, staying away from wall
-    #identifying divider wall, moving towards it when using dumptruck
+    #TODO identifying divider wall, moving towards it when using dumptruck
+    #TODO keep track of the number of red blocks we have in our dumptruck to know if we can get any more
+    #-> maybe we go to the center of the playing field after finding all of the stacks/red blocks
+    #-> center of playing field determined by when wall_height_screen ratio is the same all the way around
+    #-> and spin around until we see the orange wall, mark its angle, and then pid towards it/position
+    #TODO spinning in place
     def state_machine_callback(self): #called every 0.01 seconds
         deltaL, deltaR = 0,0
         norm_speed = 0 #no decel
@@ -231,7 +236,8 @@ class StateMachineNode(Node):
         # if self.red_counter == 5:
         #     self.activate_dumptruck()
 
-        #if too close to wall, this state pops up, overrides any state controls
+        #default: if too close to wall, this state pops up, overrides any state controls
+        #TODO some maneuvering mechanism to get aligned with the wall
         if self.wall_height_screen_ratio > 0.4:
             norm_speed = -self.NORM_SPEED
             deltaL, deltaR = 0,0
