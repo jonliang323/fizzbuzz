@@ -8,7 +8,7 @@ import busio
 from image_processing_interfaces.msg import CubeTracking
 from image_processing_interfaces.msg import EncoderCounts
 from image_processing_interfaces.msg import MotorCommand
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Int16
 
 class StateMachineNode(Node):
     def __init__(self):
@@ -38,7 +38,7 @@ class StateMachineNode(Node):
 
         # 360 scan variables
         self.scan_270_active = False
-        self.scan = True
+        self.scan_blocks = True
         self.detected_objects = []
         self.spin_speed = 50 #30 is placeholder 
 
@@ -59,6 +59,7 @@ class StateMachineNode(Node):
         self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive = 0.1,0.01,0.01
 
         self.block_screen_ratio = 0
+        self.wall_height_screen_ratio = 0
 
         #elevator variables
         self.block_intake = False
@@ -71,11 +72,12 @@ class StateMachineNode(Node):
         self.angle3_flap = 0
         self.angle4_duck = 0
 
-        self.cv_sub = self.create_subscription(CubeTracking, "cube_location_info", self.cv_callback, 10)
+        self.cube_info_sub = self.create_subscription(CubeTracking, "cube_info", self.scan_block_callback, 10)
+        self.wall_info_sub = self.create_subscription(Int16, "wall_info", self.scan_wall_callback, 10)
         self.delta_encoder_sub = self.create_subscription(EncoderCounts, "delta_encoder_info", self.delta_encoder_callback, 10)
         self.state_machine = self.create_timer(self.dT, self.state_machine_callback)
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
-        self.scan_pub = self.create_publisher(Bool, "scan_activate", 10)
+        self.cv_pub = self.create_publisher(Bool, "scan_blocks", 10)
 
         #imu initialization
         spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
@@ -88,14 +90,15 @@ class StateMachineNode(Node):
         self.imu = ICM42688(spi)
         self.imu.begin()
     
-    def cv_callback(self, msg: CubeTracking):
-        self.get_logger().info(f'Requested scan')
-        #enter here when scan is true, from callback recall initiate
+    def scan_block_callback(self, msg: CubeTracking):
+        self.get_logger().info(f'Requested cube scan')
+        #enter here when scan_blocks is true
         obj_types = msg.obj_types
         sizes = msg.sizes
         x_centers = msg.x_centers
         block_pixels = msg.block_pixels
 
+        #two cases when we want to scan the blocks (run YOLO classification)
         if self.scan_270_active:
             #obj has descriptors: distance, angle, x_center, type
             if obj_types != []:
@@ -110,8 +113,10 @@ class StateMachineNode(Node):
                 self.block_screen_ratio = block_pixels/(self.FOV_XY[0]*self.FOV_XY[1])
             else:
                 self.block_screen_ratio = 0
-        self.scan = False
+        self.scan_blocks = False
 
+    def scan_wall_callback(self, avg_height: Int16):
+        self.wall_height_screen_ratio = avg_height.data/self.FOV_XY[1]
 
     def delta_encoder_callback(self, msg: EncoderCounts):
         self.delta_encoderL = msg.encoder1
@@ -121,7 +126,9 @@ class StateMachineNode(Node):
         # self.get_logger().info(f'current_angle: {self.current_angle}')
         # self.get_logger().info(f'current_position: {self.current_pos}')
 
-    def state_machine_callback(self): #called every 0.5 seconds
+    #TODO detecting wall, staying away from wall
+    #identifying divider wall, moving towards it when using dumptruck
+    def state_machine_callback(self): #called every 0.01 seconds
         deltaL, deltaR = 0,0
         norm_speed = 0 #no decel
         
@@ -130,7 +137,7 @@ class StateMachineNode(Node):
             if self.turn_angle <= 270:
                 #turns 270 degrees
                 #scan is true
-                if not self.scan and abs(self.current_angle - self.turn_angle) > 5: #ccw turn, + angle
+                if not self.scan_blocks and abs(self.current_angle - self.turn_angle) > 5: #ccw turn, + angle
                     gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                     gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
 
@@ -141,8 +148,8 @@ class StateMachineNode(Node):
                         angle_err += 360
                     deltaL, deltaR = self.PID(angle_err, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
                     self.prev_err_turn = angle_err
-                elif not self.scan: #self.current_angle matched self.turn_angle, still no scan
-                    self.scan = True
+                elif not self.scan_blocks: #self.current_angle matched self.turn_angle, still no scan
+                    self.scan_blocks = True
                     self.turn_angle += 90
             else: #scan is complete
                 deltaL = 0
@@ -175,8 +182,8 @@ class StateMachineNode(Node):
                 deltaL, deltaR = self.PID(angle_err, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
                 self.prev_err_turn = angle_err
             else:
-                #constant scan for cube -> find % cube of screen -> have time delay? sparse scanning
-                self.scan = True
+                #TODO constant scan for cube -> find % cube of screen -> have time delay? sparse scanning
+                self.scan_blocks = True
                 self.target_align = False
                 self.target_drive = True
                 self.prev_error_turn = 0
@@ -224,6 +231,11 @@ class StateMachineNode(Node):
         # if self.red_counter == 5:
         #     self.activate_dumptruck()
 
+        #if too close to wall, this state pops up, overrides any state controls
+        if self.wall_height_screen_ratio > 0.4:
+            norm_speed = -self.NORM_SPEED
+            deltaL, deltaR = 0,0
+
         motor_msg = MotorCommand()
         dc = motor_msg.drive_motors
         servo = motor_msg.actuate_motors
@@ -239,8 +251,8 @@ class StateMachineNode(Node):
         self.motor_pub.publish(motor_msg)
 
         scan_msg = Bool()
-        scan_msg.data = self.scan
-        self.scan_pub.publish(scan_msg)
+        scan_msg.data = self.scan_blocks
+        self.cv_pub.publish(scan_msg)
     
     def find_closest_index(self, sizes):
         #find closest distance index (largest size)

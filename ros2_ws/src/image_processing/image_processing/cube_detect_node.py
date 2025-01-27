@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
 from image_processing_interfaces.msg import CubeTracking 
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Int16
 import cv2
 from cv_bridge import CvBridge
 import numpy as np
@@ -14,8 +14,9 @@ class CubeDetectNode(Node):
         super().__init__('cube_detect_subscriber')
         self.bridge = CvBridge()
         self.image_sub = self.create_subscription(CompressedImage, "image_raw/compressed", self.image_callback, 10)
-        self.scan_sub = self.create_subscription(Bool, "scan_activate", self.scan_callback, 10)
-        self.location_pub = self.create_publisher(CubeTracking, "cube_location_info", 10)
+        self.cv_sub = self.create_subscription(Bool, "scan_blocks", self.cv_callback, 10)
+        self.cube_info_pub = self.create_publisher(CubeTracking, "cube_info", 10)
+        self.wall_info_pub = self.create_publisher(Int16, "wall_info", 10)
 
         self.H_MM = 1 #mm, param, to adjust
         self.F = 2 #mm, param, to adjust
@@ -28,28 +29,36 @@ class CubeDetectNode(Node):
     def image_callback(self, msg: CompressedImage):
         self.frame = msg
 
-    def scan_callback(self, msg: Bool):
-        if msg: #otherwise, no scan, no published
-            cur_frame = self.bridge.compressed_imgmsg_to_cv2(self.frame, "bgr8")
-            
-            #preprocess to get rid of pixels above blue tape
-            hsv = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2HSV)
-            mask = cv2.inRange( #output b and w mask where white pixels are in range
-                hsv,
-                np.array([int(190/2),int(0.5*255),int(0.1*255)]), #min hsv blue 228 60 20
-                np.array([int(240/2),int(8*255),int(0.5*255)]), #max hsv blue
-            )
-            temp_bl = np.where(mask == 255) #tuple of row col lists
-            if temp_bl == []:
-                blue_locs = [(0,0)] #default, would clear top left corner if no blue detected
-            else:
-                blue_locs = sorted(list(zip(temp_bl[0],temp_bl[1])), key=lambda x:(x[1],x[0])) #sorted locs by col, then row
-            col = 0
-            #finds maximum blue row valuesassociated to each col, then clears image above that row
-            for i in range(len(blue_locs)):
-                if i == len(blue_locs) - 1 or blue_locs[i+1][1] != col: #found transition
-                    cur_frame[:blue_locs[i][0],col] = (0,0,0)
-                    col += 1
+    def cv_callback(self, scan_blocks: Bool):
+        #gets last published frame from memory
+        cur_frame = self.bridge.compressed_imgmsg_to_cv2(self.frame, "bgr8")
+        #preprocess to get rid of pixels above blue tape
+        hsv = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange( #output b and w mask where white pixels are in range
+            hsv,
+            np.array([int(190/2),int(0.5*255),int(0.1*255)]), #min hsv blue 228 60 20
+            np.array([int(240/2),int(8*255),int(0.5*255)]), #max hsv blue
+        )
+        temp_bl = np.where(mask == 255) #tuple of row col lists
+        if temp_bl == []:
+            blue_locs = [(0,0)] #default, would clear top left corner if no blue detected
+        else:
+            blue_locs = sorted(list(zip(temp_bl[0],temp_bl[1])), key=lambda x:(x[1],x[0])) #sort (row, col) locs by col, then row
+        col = 0
+        #find average pixel boundary height
+        avg_boundary_pixel = 0
+        #finds maximum blue row values associated to each col, then clears image above that row
+        for i in range(len(blue_locs)):
+            if i == len(blue_locs) - 1 or blue_locs[i+1][1] != col: #found transition to next col, or last col
+                cur_frame[:blue_locs[i][0],col] = (0,0,0)
+                avg_pixel_boundary += blue_locs[i][0]
+                col += 1
+        avg_boundary_pixel /= col
+        wall_info_msg = Int16()
+        wall_info_msg.data = avg_boundary_pixel
+        self.wall_info_pub.publish(wall_info_msg)
+
+        if scan_blocks: #if we want to look for blocks too
             ##
             # Now, feed into model for classification and bounding box
             ##
@@ -93,7 +102,7 @@ class CubeDetectNode(Node):
             cube_info_msg.obj_types = obj_type_list
             cube_info_msg.x_centers = x_center_list
             cube_info_msg.block_pixels = block_pixels
-            self.location_pub.publish(cube_info_msg)
+            self.cube_pub.publish(cube_info_msg)
     
 def main(args=None):
     rclpy.init()
