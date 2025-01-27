@@ -1,2 +1,2 @@
-float16 orange_tape_ratio 
+float32 orange_tape_ratio 
 int16 avg_height

@@ -13,8 +13,8 @@ class RavenNode(Node):
         # Set motors to DIRECT
         self.raven_board.set_motor_mode(Raven.MotorChannel.CH1, Raven.MotorMode.DIRECT)
         self.raven_board.set_motor_mode(Raven.MotorChannel.CH2, Raven.MotorMode.DIRECT)
-        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH1, 25) # Let the motor use 50% max torque to get to speed factor
-        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH2, 25)
+        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH1, 35) # Let the motor use 50% max torque to get to speed factor
+        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH2, 35)
 
         self.raven_board.set_motor_encoder(Raven.MotorChannel.CH1, 0) # Set encoder count for motor 1 to zero
         self.raven_board.set_motor_encoder(Raven.MotorChannel.CH2, 0) # Set encoder count for motor 1 to zero
@@ -63,10 +63,10 @@ class RavenNode(Node):
 
         # Set the servo 1 to x degrees with custom pulse microseconds
         # self.raven_board.set_servo_position(Raven.ServoChannel.CH1, servo.angle, servo.min_us, servo.max_us)
-        self.raven_board.set_servo_position(Raven.ServoChannel.CH1, servo.angle1_elev, 500, 2500)
+        self.raven_board.set_servo_position(Raven.ServoChannel.CH1, servo.angle1_duck, 500, 2500)
         self.raven_board.set_servo_position(Raven.ServoChannel.CH2, servo.angle2_claw, 500, 2500)
-        self.raven_board.set_servo_position(Raven.ServoChannel.CH3, servo.angle3_flap, 500, 2500)
-        self.raven_board.set_servo_position(Raven.ServoChannel.CH4, servo.angle4_duck, 500, 2500)
+        self.raven_board.set_servo_position(Raven.ServoChannel.CH3, servo.angle3_elev, 500, 2500)
+        self.raven_board.set_servo_position(Raven.ServoChannel.CH4, servo.angle4_flap, 500, 2500)
 
     def delta_encoder_callback(self):
         delta_encoder_msg = EncoderCounts()

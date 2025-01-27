@@ -13,12 +13,13 @@ class StateMachineNode(Node):
         super().__init__('state_machine')
         self.dT = 0.01 #seconds
         self.clock = Clock()
+        self.timer = 0.0
 
         self.FOV_XY = 640,480
         self.FOCAL_X = 888.54513
         self.MAX_SPEED = 100
         self.NORM_SPEED = 50
-        self.MAX_DELTA = 100
+        self.MAX_DELTA = 50
         self.WHEEL_RADIUS = (3.1875/2)*2.54 #cm
         self.BASE_RADIUS = (10.125/2)*2.54 #cm
         self.CLASSES = ['green','red','sphere']
@@ -32,18 +33,18 @@ class StateMachineNode(Node):
 
         #heading, positioning variables
         self.current_angle = 0.0
-        self.turn_angle = 90
+        self.turn_angle = 45
         self.current_pos = (0, 0)
 
         # 360 scan variables
         self.scan_270_active = False
-        self.scan_blocks = True
+        self.scan_blocks = False
         self.detected_objects = []
         self.spin_speed = 50 #30 is placeholder
         self.stack_counter = 0
 
         #turning state, PID
-        self.target_align = False
+        self.target_align = True
         self.prev_error_turn = 0
         self.error_integralL_turn, self.error_integralR_turn= 0,0
         #gains should result in critical damping, best response
@@ -128,7 +129,7 @@ class StateMachineNode(Node):
         self.delta_encoderR = msg.encoder2
         #only update angle here, after encoder deltas have been sent, to be read once per cycle
         self.update_angle_and_pos()
-        # self.get_logger().info(f'current_angle: {self.current_angle}')
+        self.get_logger().info(f'current_angle: {self.current_angle}')
         # self.get_logger().info(f'current_position: {self.current_pos}')
 
     #TODO detecting wall, staying away from wall
@@ -181,15 +182,16 @@ class StateMachineNode(Node):
                 else:
                     self.dumptruck=True
 
-                
-
         if self.target_align:
-            if abs(self.target['angle'] - self.current_angle) > 5:
+            #if abs(self.target['angle'] - self.current_angle) > 5:
+            self.get_logger().info(f'diff: {abs(self.turn_angle - self.current_angle)}')
+            if abs(self.turn_angle - self.current_angle) > 5:
                 #*** turn to face self.target["angle"] here: 
                 gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                 gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
 
-                angle_err = self.target['angle'] - self.current_angle
+                # angle_err = self.target['angle'] - self.current_angle
+                angle_err = self.turn_angle - self.current_angle
                 if angle_err > 180:
                     angle_err -= 360
                 elif angle_err < -180:
@@ -200,17 +202,20 @@ class StateMachineNode(Node):
                 #TODO constant scan for cube -> find % cube of screen -> have time delay? sparse scanning
                 self.scan_blocks = True
                 self.target_align = False
-                self.target_drive = True
+                #self.target_drive = True
                 self.prev_error_turn = 0
 
         # PID alignment, while still or driving; cube to align to should depend on recorded angle
         if self.target_drive:
+            self.timer += self.dT
             self.get_logger().info(f'block_screen_ratio: {self.block_screen_ratio}')
-            if (self.block_screen_ratio < 0.8):
+            #if (self.block_screen_ratio < 0.8):
+            if (self.timer < 5):
                 gainsL = (self.p_gainL_drive, self.i_gainL_drive, self.d_gainL_drive)
                 gainsR = (self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive)
 
-                angle_err = self.target['angle'] - self.current_angle
+                #angle_err = self.target['angle'] - self.current_angle
+                angle_err = self.turn_angle - self.current_angle
                 if angle_err > 180:
                     angle_err -= 360
                 elif angle_err < -180:
@@ -221,8 +226,9 @@ class StateMachineNode(Node):
             else:
                 norm_speed = 0
                 self.target_drive = False
-                self.block_intake = True
+                #self.block_intake = True
                 self.prev_error_drive = 0
+                self.scan_blocks = False
 
         #TODO: block intake, elevator, bird, dumptruck
         #0) grab sphere if not already
