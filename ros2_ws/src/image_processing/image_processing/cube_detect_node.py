@@ -58,6 +58,7 @@ class CubeDetectNode(Node):
             size_list = []
             obj_type_list = []
             x_center_list = []
+            y_center_list = []
 
             block_pixels = 0
             covered = []
@@ -87,12 +88,15 @@ class CubeDetectNode(Node):
                 obj_type_list.append(obj_type)
                 size_list.append(size)
                 x_center_list.append((x1+x2)/2)
+                y_center_list.append((y1+y2)/2)
+
 
             cube_info_msg = CubeTracking()
             cube_info_msg.sizes = size_list
             cube_info_msg.obj_types = obj_type_list
             cube_info_msg.x_centers = x_center_list
             cube_info_msg.block_pixels = block_pixels
+            cube_info_msg.y_centers = y_center_list
             self.location_pub.publish(cube_info_msg)
     
 def main(args=None):
