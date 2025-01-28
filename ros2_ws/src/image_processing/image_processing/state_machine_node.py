@@ -37,6 +37,8 @@ class StateMachineNode(Node):
         self.turn_angle = 90
         #self.current_pos = (0, 0)
 
+        self.camera_startup = True
+
         # 360 scan variables
         self.scan_270_active = False
         self.scan_blocks = False
@@ -50,8 +52,8 @@ class StateMachineNode(Node):
         self.prev_error_turn = 0
         self.error_integralL_turn, self.error_integralR_turn= 0,0
         #gains should result in critical damping, best response
-        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 0.6,0.001,0.001
-        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 0.6,0.001,0.001
+        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 0.9,0.01,0.01
+        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 0.9,0.01,0.01
 
         #turn drive state, PID
         self.target_drive = False
@@ -66,7 +68,7 @@ class StateMachineNode(Node):
         self.orange_tape_ratio = 0
 
         #elevator variables
-        self.block_intake = True
+        self.block_intake = False
         self.first_sphere_grabbed = True
         self.red_counter = 0
         self.elevator_timer_count = 0
@@ -114,7 +116,7 @@ class StateMachineNode(Node):
         #two cases when we want to scan the blocks (run YOLO classification)
         if self.scan_270_active: #shouldn't this be if self.scan?
             #obj has descriptors: distance, angle, x_center, type
-            if obj_types != []:
+            if len(obj_types) > 0:
                 closest = self.find_closest_index(sizes)
                 rel_angle = int(math.atan((self.FOV_XY[0]/2 - x_centers[closest])/self.FOCAL_X)*180/math.pi)
                 closest_obj = {"size":sizes[closest], "angle":self.current_angle + rel_angle, "type":self.CLASSES[obj_types[closest]]}
@@ -123,7 +125,7 @@ class StateMachineNode(Node):
             #otherwise, detected objects is not changed
         elif self.target_drive:
             #find block screen ratio
-            if obj_types != []:
+            if len(obj_types) > 0:
                 self.block_screen_ratio = block_pixels/(self.FOV_XY[0]*self.FOV_XY[1])
             else:
                 self.block_screen_ratio = 0
@@ -150,15 +152,23 @@ class StateMachineNode(Node):
     #-> and spin around until we see the orange wall, mark its angle, and then pid towards it/position
     #TODO spinning in place
     def state_machine_callback(self): #called every 0.01 seconds
+        self.competition_timer_count += 1
         if self.competition_timer_count <= 13500:
             deltaL, deltaR = 0,0
             norm_speed = 0 #no decel
             
+            if self.camera_startup:
+                if self.competition_timer_count > 300:
+                    self.get_logger().info('entered main seq')
+                    self.camera_startup = False
+                    self.scan_270_active = True
+                    self.scan_blocks = True
+
             if self.scan_270_active:
                 #spins full 270
-                if self.turn_angle <= 90:
+                if self.turn_angle <= 270:
                     #turns 270 degrees
-                    #scan is true
+                    #scan_blocks is initially true
                     if not self.scan_blocks and abs(self.current_angle - self.turn_angle) > 5: #ccw turn, + angle
                         gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                         gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
@@ -169,7 +179,7 @@ class StateMachineNode(Node):
                         elif angle_err < -180:
                             angle_err += 360
                         deltaL, deltaR = self.PID(angle_err, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
-                        self.prev_err_turn = angle_err
+                        self.prev_error_turn = angle_err
                     elif not self.scan_blocks: #self.current_angle matched self.turn_angle, still no scan
                         self.scan_blocks = True
                         self.turn_angle += 90
@@ -184,15 +194,17 @@ class StateMachineNode(Node):
                         self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
                         self.detected_objects = []
                         self.scan_270_active = False
-                        #self.target_align = True #ok
+                        #self.target_align = True
                         self.prev_error_turn = 0
                     elif len(self.detected_objects) == 0: #and self.stack_counter < 5:
                         #TODO: if no cubes found while there are still cubes to be found --> scan again
                         self.turn_angle = 0
-                        self.scan = False
+                        self.scan_blocks = False
                         self.get_logger().info('found no objects')
                     else:
-                        self.dumptruck=True
+                        pass
+                        #self.dumptruck=True
+                    self.get_logger().info(f'These are our objects: {self.detected_objects}')
 
             if self.target_align:
                 #if abs(self.target['angle'] - self.current_angle) > 5:
@@ -352,16 +364,6 @@ class StateMachineNode(Node):
                         self.duck = True
                         self.block_intake = False
                         self.scan_270_active = True
-            
-
-            if self.dumptruck:
-                self.activate_dumptruck()
-            if self.elevator:
-                self.activate_elevator()
-            if self.duck:
-                self.activate_bird()
-            if self.crook:
-                self.activate_crook()
 
             #default: if too close to wall, this state pops up, overrides any state controls
             #TODO some maneuvering mechanism to get aligned with the wall
