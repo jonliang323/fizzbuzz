@@ -24,7 +24,7 @@ class StateMachineNode(Node):
         self.WHEEL_RADIUS = (3.1875/2)*2.54 #cm
         self.BASE_RADIUS = (10.125/2)*2.54 #cm
         self.CLASSES = ['green','red','sphere']
-        self.current_stack = (0,0)
+        self.current_stack = (None,None)
 
         #cv variables
         #encoder variables
@@ -75,10 +75,12 @@ class StateMachineNode(Node):
         self.duck = False
         self.crook = False
         self.elevator_state = 'idle'
-        self.angle1_duck = 0
-        self.angle2_claw = 0
-        self.angle3_elev = 0
+        self.angle1_duck = 45
+        self.angle2_claw = -20
+        self.angle3_elev = 90
         self.angle4_flap = 0
+        self.intake_timer_count = 0
+        self.do_next_thing = False
 
         self.cube_info_sub = self.create_subscription(CubeTracking, "cube_info", self.scan_block_callback, 10)
         self.wall_info_sub = self.create_subscription(WallInfo, "wall_info", self.scan_wall_callback, 10)
@@ -255,23 +257,75 @@ class StateMachineNode(Node):
         #-> if red, flip flap, activate bird
         #-> if green, flip flap, activate elevator
         #4) scan for objects, find closest, turn to face, drive to object
+        
         if self.block_intake:
-            queue = self.current_stack
-            if queue[1] is not None:
-                self.stack_counter += 1
-            #go forwards a little here
-            if queue[1]["type"] == 'green': # or self.first_sphere_grabbed == False: ...do sphere flag separately
-                self.elevator = True
-        #         self.first_sphere_grabbed = True
-            else:
-                self.duck = True
-        #         self.activate_bird()
-        #         self.red_counter += 1
-        #     else:
-        #         self.activate_bird()
+            # queue = self.current_stack
+            queue = [{"size": 0, "angle": 0, "type": "green"}, {"size": 0, "angle": 0, "type": "red"}]
+            # if queue[1] is not None:
+            #     self.stack_counter += 1
 
-        # if self.red_counter == 5:
-        #     self.activate_dumptruck()
+            if self.first_sphere_grabbed == False: 
+                self.crook = True
+                #move forward a little bit
+                self.elevator = True
+                self.first_sphere_grabbed = True
+
+            else:
+                self.angle4_flap = -90 if queue[0]["type"] == 'green' else 0 # set flap to open if green, closed if red
+
+                deltaL = deltaR = 30
+                time.sleep(1)
+                deltaL = deltaR = 0 #go forwards a little here (ex. 1 sec) to have it move forward enough so that red block would be flush against flap and would knock stack over
+
+                if queue[1]["type"] == 'green': # or self.first_sphere_grabbed == False: ...do sphere flag separately
+                    #sequence here for red then green
+                    self.duck = True
+                    self.intake_timer_count +=1
+
+                    # if self.intake_timer_count >= 300: #10 seconds
+                    #     deltaL = deltaR = 30 #move forward some so green is closer to elevator
+                    #     time.sleep(1)
+                    #     deltaL = deltaR = 0 #stop
+                    #     self.elevator = True
+                    #     self.elevator_timer_count = 0
+
+                    if self.do_next_thing == True: #10 seconds
+                        deltaL = deltaR = 30 #move forward some so green is closer to elevator
+                        time.sleep(1)
+                        deltaL = deltaR = 0 #stop
+                        self.elevator = True
+                        
+
+                elif queue[1]["type"] == 'red':
+                    #seqeunce here for green then red
+                    self.elevator = True
+                    self.intake_timer_count +=1
+
+                    # if self.intake_timer_count >= 1000: #10 seconds
+                    #     deltaL = deltaR = 30 #move forward some so red is flush with flap
+                    #     time.sleep(1)
+                    #     deltaL = deltaR = 0 #stop
+                    #     self.duck = True
+                    #     self.elevator_timer_count = 0
+
+                    if self.do_next_thing: #10 seconds
+                        deltaL = deltaR = 30 #move forward some so red is flush with flap
+                        time.sleep(1)
+                        deltaL = deltaR = 0 #stop
+                        self.duck = True
+                        
+
+                elif queue[0]["type"] == 'green':
+                    #sequence here for green only
+                    self.elevator = True
+
+                elif queue[0]["type"] == 'red':
+                    #sequence here for red only
+                    self.duck = True
+                
+                self.block_intake = False
+                self.scan_270_active = True
+
 
         if self.dumptruck:
             self.activate_dumptruck()
@@ -280,6 +334,8 @@ class StateMachineNode(Node):
             self.activate_elevator()
         if self.duck:
             self.activate_bird()
+        if self.crook:
+            self.activate_crook()
 
         #default: if too close to wall, this state pops up, overrides any state controls
         #TODO some maneuvering mechanism to get aligned with the wall
@@ -323,7 +379,7 @@ class StateMachineNode(Node):
         stack_partner_index = None
         for x in msg.x_centers:
             diff = x - msg.x_centers[index_of_closest]
-            if diff < 20: #different of 20 pixels
+            if diff < 20: #difference of 20 pixels
                 stack_partner_index = msg.x_centers.index(x)
                 rel_angle = int(math.atan((self.FOV_XY[0]/2 - msg.x_centers[stack_partner_index])/self.FOCAL_X)*180/math.pi)
                 stack_partner = {"size":msg.sizes[stack_partner_index], "angle":self.current_angle + rel_angle, "type":self.CLASSES[msg.obj_types[stack_partner_index]]}
@@ -396,13 +452,27 @@ class StateMachineNode(Node):
             # if self.i == 0:
                 self.angle3_elev = 90
                 self.angle4_flap = -90 #flap open...if we want default flap to be closed, we can open it above when we set block_intake to be true
-                self.angle2_claw = -45  #claws open
-                #robot should move forward at this point. 
+                self.angle2_claw = -20  #claws stay closed
+                #TODO: robot should move forward at this point. 
+
 
                 self.elevator_timer_count += 1
                 # print(f'state: open claws ------angles: elev: {self.angle3_elev} claw: {self.angle2_claw} flap: {self.angle4_flap}')
 
                 if self.elevator_timer_count >= 200:  #wait 2 seconds
+                    self.elevator_state = 'flap closes'
+                    # print(f'state going to: {self.elevator_state}')
+                    self.elevator_timer_count = 0
+
+            elif self.elevator_state == 'flap closes':
+            # elif self.i == 1:
+                self.angle3_elev = 90  
+                self.angle4_flap = 0    #flap closes 
+                self.angle2_claw = -20
+                # print(f'state: elev moving down------angles: elev: {self.angle3_elev} claw: {self.angle2_claw} flap: {self.angle4_flap}')
+
+                self.elevator_timer_count += 1
+                if self.elevator_timer_count >= 200:  
                     self.elevator_state = 'elev move down'
                     # print(f'state going to: {self.elevator_state}')
                     self.elevator_timer_count = 0
@@ -410,8 +480,8 @@ class StateMachineNode(Node):
             elif self.elevator_state == 'elev move down':
             # elif self.i == 1:
                 self.angle3_elev = -90  #elevator moves down
-                self.angle4_flap = 0    #flap closes 
-                self.angle2_claw = -45
+                self.angle4_flap = 0    #flap stays closed
+                self.angle2_claw = -45  #claws open at the same time
                 # print(f'state: elev moving down------angles: elev: {self.angle3_elev} claw: {self.angle2_claw} flap: {self.angle4_flap}')
 
                 self.elevator_timer_count += 1
@@ -459,16 +529,19 @@ class StateMachineNode(Node):
                     # print(f'state going to: {self.elevator_state}')
                     self.elevator_timer_count = 0
                 self.elevator = False
+                self.do_next_thing = True
 
         
     #TODO: implement bird
     def activate_bird(self):
         #activate bird when red block comes
         motor_msg = MotorCommand()
-
-        motor_msg.actuate_motors.angle4 = -90 #idk what the bird angles are
-        time.sleep(1)
-        motor_msg.actuate_motors.angle4 = 90
+        if self.bird:
+            motor_msg.actuate_motors.angle4 = -45 #idk what the bird angles are
+            time.sleep(1)
+            motor_msg.actuate_motors.angle4 = 45
+            self.bird = False
+            self.do_next_thing = True
     
     #
     # TODO: implement dumptruck
@@ -495,6 +568,7 @@ class StateMachineNode(Node):
         if self.elevator_timer_count >= 150: #.5 sec
             motor_msg.left_speed = 0
             motor_msg.right_speed = 0
+            #probably have to move forward again
             self.activate_elevator()
 
 
