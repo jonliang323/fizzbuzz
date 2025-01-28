@@ -18,7 +18,7 @@ class MockStateMachineNode(Node):
         self.FOV_XY = 640,480
         self.FOCAL_X = 888.54513
         self.MAX_SPEED = 100
-        self.NORM_SPEED = 30
+        self.NORM_SPEED = 0#30
         self.MAX_DELTA = 50
         self.WHEEL_RADIUS = (3.1875/2)*2.54 #cm
         self.BASE_RADIUS = (10.125/2)*2.54 #cm
@@ -49,8 +49,8 @@ class MockStateMachineNode(Node):
         self.prev_error_turn = 0
         self.error_integralL_turn, self.error_integralR_turn= 0,0
         #gains should result in critical damping, best response
-        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 0.6,0.001,0.001
-        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 0.6,0.001,0.001
+        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 0.9,0.01,0.1
+        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 0.9,0.01,0.1
 
         #turn drive state, PID
         self.target_drive = False
@@ -81,9 +81,11 @@ class MockStateMachineNode(Node):
 
 
         self.count = 0
-        self.angles = [0, -45, 45, 135]
+        # self.angles = [0, -45, 45, 135]
+        self.angles = [45, 90, 180, 270, 360]
         self.timer = 0.0
-        self.times = [1.5, 5, 3, 4]
+        # self.times = [1.5, 5, 3, 4]
+        self.times = [1, 1, 1, 1, 1]
         #self.global_timer = 0
 
 
@@ -138,12 +140,12 @@ class MockStateMachineNode(Node):
         self.orange_tape_ratio = msg.orange_tape_ratio
 
     def delta_encoder_callback(self, msg: EncoderCounts):
-        self.delta_encoderL = msg.encoder1
-        self.delta_encoderR = msg.encoder2
+        self.delta_encoderR = msg.encoder1
+        self.delta_encoderL = msg.encoder2
         #self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}')
         #only update angle here, after encoder deltas have been sent, to be read once per cycle
         self.update_angle_and_pos()
-        #self.get_logger().info(f'current_angle: {self.current_angle}')
+        self.get_logger().info(f'current_angle: {self.current_angle}')
         #self.get_logger().info(f'current_position: {self.current_pos}')
 
     #TODO detecting wall, staying away from wall
@@ -158,8 +160,8 @@ class MockStateMachineNode(Node):
         norm_speed = 0 #no decel
         #self.global_timer += self.dT
 
-        if self.target_align and self.count < 4:
-            if abs(self.angles[self.count] - self.current_angle) > 10:
+        if self.target_align and self.count < 5:
+            if abs(self.angles[self.count] - self.current_angle) > 6:
                 #*** turn to face self.target["angle"] here: 
                 gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                 gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
@@ -212,18 +214,18 @@ class MockStateMachineNode(Node):
                 self.target_align = True
                 self.prev_error_drive = 0
         
-        if (self.timer < self.times[self.count]):
-            self.activate_elevator()
+        # if (self.timer < self.times[self.count]):
+        #     self.activate_elevator()
 
         motor_msg = MotorCommand()
         dc = motor_msg.drive_motors
         servo = motor_msg.actuate_motors
 
-        #self.get_logger().info(f"lW: {-norm_speed + deltaL}, rW: {-norm_speed + deltaR}")
+        # self.get_logger().info(f"lW: {-norm_speed + deltaL}, rW: {-norm_speed + deltaR}")
 
         #set motor speeds
-        dc.left_speed = int(-norm_speed + deltaL)
-        dc.right_speed = int(-norm_speed + deltaR)
+        dc.left_speed = int(norm_speed + deltaL)
+        dc.right_speed = int(norm_speed + deltaR)
         #dc.dt_speed = 30
         servo.angle1_duck = self.angle1_duck
         servo.angle2_claw = self.angle2_claw

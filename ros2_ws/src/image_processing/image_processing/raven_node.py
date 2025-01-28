@@ -29,19 +29,20 @@ class RavenNode(Node):
         dc = msg.drive_motors
         servo = msg.actuate_motors
         rev = False
+        #flipped negative logic to account for rotation of motors in given polarity
         if dc.left_speed < 0:
             left_speed = abs(dc.left_speed)
-            left_rev = True
+            left_rev = False
         else:
             left_speed = dc.left_speed
-            left_rev = False
+            left_rev = True
         
         if dc.right_speed < 0:
             right_speed = abs(dc.right_speed)
-            right_rev=True
+            right_rev=False
         else:
             right_speed = dc.right_speed
-            right_rev=False
+            right_rev=True
 
         if dc.dt_speed < 0:
             dt_speed = abs(dc.dt_speed)
@@ -56,7 +57,7 @@ class RavenNode(Node):
         # Speed controlled:
         self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, right_speed, reverse=right_rev)
         self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, left_speed, reverse=left_rev)
-        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH3, dt_speed, reverse=dt_rev)
+        # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH3, dt_speed, reverse=dt_rev)
 
         # Torque controlled:
         # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, 100) # Make motor try to run at max speed forward
@@ -71,8 +72,8 @@ class RavenNode(Node):
 
     def delta_encoder_callback(self):
         delta_encoder_msg = EncoderCounts()
-        delta_encoder_msg.encoder1 = -self.raven_board.get_motor_encoder(Raven.MotorChannel.CH1)
-        delta_encoder_msg.encoder2 = self.raven_board.get_motor_encoder(Raven.MotorChannel.CH2)
+        delta_encoder_msg.encoder1 = self.raven_board.get_motor_encoder(Raven.MotorChannel.CH1)
+        delta_encoder_msg.encoder2 = -self.raven_board.get_motor_encoder(Raven.MotorChannel.CH2)
         # self.get_logger().info("entered encoder_callback")
         
         #Reset encoder counts
