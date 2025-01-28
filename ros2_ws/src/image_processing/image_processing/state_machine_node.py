@@ -5,6 +5,7 @@ from icm42688 import ICM42688
 import math
 import board
 import busio
+import time
 from image_processing_interfaces.msg import CubeTracking, EncoderCounts, MotorCommand, WallInfo
 from std_msgs.msg import Bool
 
@@ -33,7 +34,7 @@ class StateMachineNode(Node):
 
         #heading, positioning variables
         self.current_angle = 0.0
-        self.turn_angle = 45
+        self.turn_angle = 90
         self.current_pos = (0, 0)
 
         # 360 scan variables
@@ -69,7 +70,9 @@ class StateMachineNode(Node):
         self.red_counter = 0
         self.elevator_timer_count = 0
         self.elevator = False
-        self.dumptruck=False
+        self.dumptruck = False
+        self.duck = False
+        self.crook = False
         self.elevator_state = 'idle'
         self.angle1_duck = 0
         self.angle2_claw = 0
@@ -127,9 +130,10 @@ class StateMachineNode(Node):
     def delta_encoder_callback(self, msg: EncoderCounts):
         self.delta_encoderL = msg.encoder1
         self.delta_encoderR = msg.encoder2
+        # self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}')
         #only update angle here, after encoder deltas have been sent, to be read once per cycle
         self.update_angle_and_pos()
-        self.get_logger().info(f'current_angle: {self.current_angle}')
+        # self.get_logger().info(f'current_angle: {self.current_angle}')
         # self.get_logger().info(f'current_position: {self.current_pos}')
 
     #TODO detecting wall, staying away from wall
@@ -185,7 +189,7 @@ class StateMachineNode(Node):
         if self.target_align:
             #if abs(self.target['angle'] - self.current_angle) > 5:
             self.get_logger().info(f'diff: {abs(self.turn_angle - self.current_angle)}')
-            if abs(self.turn_angle - self.current_angle) > 5:
+            if abs(self.turn_angle - self.current_angle) > 10:
                 #*** turn to face self.target["angle"] here: 
                 gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                 gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
@@ -200,33 +204,42 @@ class StateMachineNode(Node):
                 self.prev_err_turn = angle_err
             else:
                 #TODO constant scan for cube -> find % cube of screen -> have time delay? sparse scanning
+                deltaL = deltaR = 0
                 self.scan_blocks = True
                 self.target_align = False
-                #self.target_drive = True
+                self.target_drive = True
                 self.prev_error_turn = 0
 
         # PID alignment, while still or driving; cube to align to should depend on recorded angle
         if self.target_drive:
             self.timer += self.dT
-            self.get_logger().info(f'block_screen_ratio: {self.block_screen_ratio}')
+            # self.get_logger().info(f'block_screen_ratio: {self.block_screen_ratio}')
+            
             #if (self.block_screen_ratio < 0.8):
-            if (self.timer < 5):
+            if (self.timer < 3):
                 gainsL = (self.p_gainL_drive, self.i_gainL_drive, self.d_gainL_drive)
                 gainsR = (self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive)
 
-                #angle_err = self.target['angle'] - self.current_angle
+                # angle_err = self.target['angle'] - self.current_angle
                 angle_err = self.turn_angle - self.current_angle
+                self.get_logger().info(f"angle error: {angle_err}")
+                # angle_err = 10
                 if angle_err > 180:
                     angle_err -= 360
                 elif angle_err < -180:
                     angle_err += 360
                 deltaL, deltaR = self.PID(angle_err, self.prev_error_drive, self.error_integralL_drive, self.error_integralR_drive, gainsL, gainsR)
+                # deltaL = deltaR = 0
                 norm_speed = self.NORM_SPEED
+
                 self.prev_err_drive = angle_err
+                self.get_logger().info(f'deltaL and R: {deltaL, deltaR}')
+            
             else:
+                self.get_logger().info(f'self.target_drive stopped')
                 norm_speed = 0
                 self.target_drive = False
-                #self.block_intake = True
+                self.block_intake = True
                 self.prev_error_drive = 0
                 self.scan_blocks = False
 
@@ -239,14 +252,16 @@ class StateMachineNode(Node):
         #-> if red, flip flap, activate bird
         #-> if green, flip flap, activate elevator
         #4) scan for objects, find closest, turn to face, drive to object
-        queue = self.current_stack
-        if queue[1] is not None:
-            self.stack_counter += 1
-        # if self.block_intake:
-        #     if block == green or self.first_sphere_grabbed == False:
-        #         self.activate_elevator()
+        if self.block_intake:
+            queue = self.current_stack
+            if queue[1] is not None:
+                self.stack_counter += 1
+            #go forwards a little here
+            if queue[1]["type"] == 'green': # or self.first_sphere_grabbed == False: ...do sphere flag separately
+                self.elevator = True
         #         self.first_sphere_grabbed = True
-        #     elif block == red:
+            else:
+                self.duck = True
         #         self.activate_bird()
         #         self.red_counter += 1
         #     else:
@@ -260,6 +275,8 @@ class StateMachineNode(Node):
             self.dumptruck = False
         if self.elevator:
             self.activate_elevator()
+        if self.duck:
+            self.activate_bird()
 
         #default: if too close to wall, this state pops up, overrides any state controls
         #TODO some maneuvering mechanism to get aligned with the wall
@@ -278,6 +295,8 @@ class StateMachineNode(Node):
         servo.angle2_claw = self.angle2_claw
         servo.angle3_elev = self.angle3_elev
         servo.angle4_flap = self.angle4_flap
+
+        # self.get_logger().info(f'{dc.left_speed, dc.right_speed}')
 
         self.motor_pub.publish(motor_msg)
 
@@ -335,7 +354,7 @@ class StateMachineNode(Node):
             dy = math.sin(-theta)*dx_prime + math.cos(-theta)*dy_prime
 
             self.current_pos = (self.current_pos[0] - dx*(29/25), self.current_pos[1] + dy*(29/25))
-            self.current_angle = self.modulate_angle(self.current_angle + int(dtheta*180/math.pi))
+            self.current_angle = self.modulate_angle(self.current_angle + round((dtheta*180/math.pi),2))
 
     def modulate_angle(self, angle):
         if angle > 0:
