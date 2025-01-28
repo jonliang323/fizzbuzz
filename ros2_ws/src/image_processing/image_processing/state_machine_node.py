@@ -19,7 +19,7 @@ class StateMachineNode(Node):
         self.FOV_XY = 640,480
         self.FOCAL_X = 888.54513
         self.MAX_SPEED = 100
-        self.NORM_SPEED = 50
+        self.NORM_SPEED = 30
         self.MAX_DELTA = 50
         self.WHEEL_RADIUS = (3.1875/2)*2.54 #cm
         self.BASE_RADIUS = (10.125/2)*2.54 #cm
@@ -50,16 +50,16 @@ class StateMachineNode(Node):
         self.prev_error_turn = 0
         self.error_integralL_turn, self.error_integralR_turn= 0,0
         #gains should result in critical damping, best response
-        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 0.5,0.01,0.01
-        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 0.5,0.01,0.01
+        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 0.6,0.001,0.001
+        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 0.6,0.001,0.001
 
         #turn drive state, PID
         self.target_drive = False
         self.prev_error_drive = 0
         self.error_integralL_drive, self.error_integralR_drive= 0,0
         #gains should result in critical damping, best response
-        self.p_gainL_drive, self.i_gainL_drive, self.d_gainL_drive = 0.1,0.01,0.01
-        self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive = 0.1,0.01,0.01
+        self.p_gainL_drive, self.i_gainL_drive, self.d_gainL_drive = 0.5,0.01,0.1
+        self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive = 0.5,0.01,0.1
 
         self.block_screen_ratio = 0
         self.wall_height_screen_ratio = 0
@@ -131,7 +131,7 @@ class StateMachineNode(Node):
     def delta_encoder_callback(self, msg: EncoderCounts):
         self.delta_encoderL = msg.encoder1
         self.delta_encoderR = msg.encoder2
-        self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}')
+        #self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}')
         #only update angle here, after encoder deltas have been sent, to be read once per cycle
         self.update_angle_and_pos()
         self.get_logger().info(f'current_angle: {self.current_angle}')
@@ -190,7 +190,7 @@ class StateMachineNode(Node):
         if self.target_align:
             #if abs(self.target['angle'] - self.current_angle) > 5:
             self.get_logger().info(f'diff: {abs(self.turn_angle - self.current_angle)}')
-            if abs(self.turn_angle - self.current_angle) > 5:
+            if abs(self.turn_angle - self.current_angle) > 10:
                 #*** turn to face self.target["angle"] here: 
                 gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                 gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
@@ -212,22 +212,21 @@ class StateMachineNode(Node):
                 deltaL = deltaR = 0
                 self.scan_blocks = True
                 self.target_align = False
-                # self.target_drive = True
+                self.target_drive = True
                 self.prev_error_turn = 0
 
         # PID alignment, while still or driving; cube to align to should depend on recorded angle
         if self.target_drive:
-            self.timer += self.dT
             # self.get_logger().info(f'block_screen_ratio: {self.block_screen_ratio}')
             
             #if (self.block_screen_ratio < 0.8):
-            if (self.timer < 3):
+            if (self.timer < 5):
+                self.timer += self.dT
                 gainsL = (self.p_gainL_drive, self.i_gainL_drive, self.d_gainL_drive)
                 gainsR = (self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive)
 
                 # angle_err = self.target['angle'] - self.current_angle
                 angle_error = self.turn_angle - self.current_angle
-                self.get_logger().info(f"angle error: {angle_err}")
                 # angle_error = 10
                 if angle_error > 180:
                     angle_error -= 360
@@ -238,13 +237,12 @@ class StateMachineNode(Node):
                 norm_speed = self.NORM_SPEED
 
                 self.prev_errpr_drive = angle_error
-                self.get_logger().info(f'deltaL and R: {deltaL, deltaR}')
             
             else:
                 self.get_logger().info(f'self.target_drive stopped')
                 norm_speed = 0
                 self.target_drive = False
-                self.block_intake = True
+                # self.block_intake = True
                 self.prev_error_drive = 0
                 self.scan_blocks = False
 
@@ -292,6 +290,8 @@ class StateMachineNode(Node):
         motor_msg = MotorCommand()
         dc = motor_msg.drive_motors
         servo = motor_msg.actuate_motors
+
+        self.get_logger().info(f"lW: {-norm_speed + deltaL}, rW: {-norm_speed + deltaR}")
 
         #set motor speeds
         dc.left_speed = int(-norm_speed + deltaL)
