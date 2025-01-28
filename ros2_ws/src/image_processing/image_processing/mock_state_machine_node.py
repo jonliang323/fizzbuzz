@@ -81,10 +81,10 @@ class MockStateMachineNode(Node):
 
 
         self.count = 0
-        self.angles = [90, 0, -90, 180]
+        self.angles = [0, -45, 45, 135]
         self.timer = 0.0
-        self.times = [2, 2, 2, 2]
-        self.global_timer = 0
+        self.times = [1.5, 5, 3, 4]
+        #self.global_timer = 0
 
 
 
@@ -156,9 +156,9 @@ class MockStateMachineNode(Node):
     def state_machine_callback(self): #called every 0.01 seconds
         deltaL, deltaR = 0,0
         norm_speed = 0 #no decel
-        self.global_timer += self.dT
+        #self.global_timer += self.dT
 
-        if self.target_align and self.global_timer < 150:
+        if self.target_align and self.count < 4:
             if abs(self.angles[self.count] - self.current_angle) > 10:
                 #*** turn to face self.target["angle"] here: 
                 gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
@@ -205,7 +205,7 @@ class MockStateMachineNode(Node):
                 self.prev_errpr_drive = angle_error
             
             else:
-                self.count = (self.count+1)%4
+                self.count+=1
                 self.get_logger().info(f'self.target_drive stopped')
                 norm_speed = 0
                 self.target_drive = False
