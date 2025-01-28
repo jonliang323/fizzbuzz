@@ -27,6 +27,7 @@ setup(
     entry_points={
         'console_scripts': [
             'state_machine = image_processing.state_machine_node:main',
+            'mock_state_machine = image_processing.mock_state_machine_node:main',
             'cube_detect_subscriber = image_processing.cube_detect_node:main',
             'raven_subscriber = image_processing.raven_node:main',
             'test_motor_subscriber = image_processing.test_motor_node:main',

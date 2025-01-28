@@ -2,9 +2,9 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    state_machine_node = Node(
+    mock_state_machine_node = Node(
         package='image_processing',
-        executable='state_machine',
+        executable='mock_state_machine',
         output='screen'
     )
 
@@ -14,4 +14,4 @@ def generate_launch_description():
         output='screen'
     )
 
-    return LaunchDescription([state_machine_node, raven_node])
+    return LaunchDescription([mock_state_machine_node, raven_node])

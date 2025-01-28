@@ -16,7 +16,7 @@ class CubeDetectNode(Node):
         self.image_sub = self.create_subscription(CompressedImage, "image_raw/compressed", self.image_callback, 10)
         self.cv_sub = self.create_subscription(Bool, "scan_blocks", self.cv_callback, 10)
         self.cube_info_pub = self.create_publisher(CubeTracking, "cube_info", 10)
-        self.wall_info_pub = self.create_publisher(Int16, "wall_info", 10)
+        self.wall_info_pub = self.create_publisher(WallInfo, "wall_info", 10)
 
         self.H_MM = 1 #mm, param, to adjust
         self.F = 2 #mm, param, to adjust
@@ -42,7 +42,7 @@ class CubeDetectNode(Node):
         )
         blue_temp = np.where(blue_mask == 255) #tuple of row col lists
         if blue_temp == []:
-            blue_locs = [(0,0)] #default, would clear top left corner if no blue detected
+            blue_locs = [(0,0,'b')] #default, would clear top left corner if no blue detected
         else:
             blue_locs = list(zip(blue_temp[0],blue_temp[1],['b']*len(blue_temp[0])))
         #Orange processing
@@ -57,24 +57,27 @@ class CubeDetectNode(Node):
         else:
             orange_locs = list(zip(orange_temp[0],orange_temp[1],['o']*len(orange_temp[0])))
         
-        all_locs = sorted(blue_locs + orange_locs, key=lambda x:(x[1],x[0])) #sort (row, col) locs by col, then row
-        col = 0
+        all_locs = sorted(blue_locs + orange_locs, key=lambda x:(x[1],x[0])) #sort (row, col, color) locs by col, then row
         #find average pixel boundary height (for orange + blue combined)
         avg_boundary_pixel = 0
-        #finds maximum orange,blue row values associated to each col, then clears image above that row
-        for i in range(len(all_locs)):
-            if i == len(all_locs) - 1 or all_locs[i+1][1] != col: #found transition to next col, or last col
-                max_masked_loc = all_locs[i]
-                if max_masked_loc[2] == 'b':
-                    cur_frame[:max_masked_loc[0],col] = (0,0,0)
-                else: # == 'o' for visual debugging
-                    cur_frame[:max_masked_loc[0],col] = (255,255,255)
-                avg_pixel_boundary += max_masked_loc[0]
-                col += 1
-        avg_boundary_pixel = avg_boundary_pixel/col
+        otr = 0
+        if len(all_locs) > 0:
+            col = 0
+            #finds maximum orange,blue row values associated to each col, then clears image above that row
+            for i in range(len(all_locs)):
+                if i == len(all_locs) - 1 or all_locs[i+1][1] != col: #found transition to next col, or last col
+                    max_masked_loc = all_locs[i]
+                    if max_masked_loc[2] == 'b':
+                        cur_frame[:max_masked_loc[0],col] = (0,0,0)
+                    else: # == 'o' for visual debugging
+                        cur_frame[:max_masked_loc[0],col] = (255,255,255)
+                    avg_boundary_pixel += max_masked_loc[0]
+                    col += 1
+            avg_boundary_pixel = avg_boundary_pixel//col
+            otr = len(orange_locs)/len(all_locs)
 
         wall_info_msg = WallInfo()
-        wall_info_msg.orange_tape_ratio = len(orange_locs)/len(all_locs)
+        wall_info_msg.orange_tape_ratio = otr
         wall_info_msg.avg_height = avg_boundary_pixel
         self.wall_info_pub.publish(wall_info_msg)
 

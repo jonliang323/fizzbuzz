@@ -13,8 +13,10 @@ class RavenNode(Node):
         # Set motors to DIRECT
         self.raven_board.set_motor_mode(Raven.MotorChannel.CH1, Raven.MotorMode.DIRECT)
         self.raven_board.set_motor_mode(Raven.MotorChannel.CH2, Raven.MotorMode.DIRECT)
+        self.raven_board.set_motor_mode(Raven.MotorChannel.CH3, Raven.MotorMode.DIRECT)
         self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH1, 80) # Let the motor use 50% max torque to get to speed factor
         self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH2, 80)
+        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH3, 25)
 
         self.raven_board.set_motor_encoder(Raven.MotorChannel.CH1, 0) # Set encoder count for motor 1 to zero
         self.raven_board.set_motor_encoder(Raven.MotorChannel.CH2, 0) # Set encoder count for motor 1 to zero
