@@ -350,8 +350,8 @@ class StateMachineNode(Node):
         #self.get_logger().info(f"lW: {-norm_speed + deltaL}, rW: {-norm_speed + deltaR}")
 
         #set motor speeds
-        dc.left_speed = int(-norm_speed + deltaL)
-        dc.right_speed = int(-norm_speed + deltaR)
+        dc.left_speed = int(norm_speed + deltaL)
+        dc.right_speed = int(norm_speed + deltaR)
         servo.angle1_duck = self.angle1_duck
         servo.angle2_claw = self.angle2_claw
         servo.angle3_elev = self.angle3_elev
