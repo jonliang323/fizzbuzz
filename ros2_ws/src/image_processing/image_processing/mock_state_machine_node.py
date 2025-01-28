@@ -18,7 +18,7 @@ class MockStateMachineNode(Node):
         self.FOV_XY = 640,480
         self.FOCAL_X = 888.54513
         self.MAX_SPEED = 100
-        self.NORM_SPEED = 0#30
+        self.NORM_SPEED = 30
         self.MAX_DELTA = 50
         self.WHEEL_RADIUS = (3.1875/2)*2.54 #cm
         self.BASE_RADIUS = (10.125/2)*2.54 #cm
@@ -82,10 +82,10 @@ class MockStateMachineNode(Node):
 
         self.count = 0
         # self.angles = [0, -45, 45, 135]
-        self.angles = [45, 90, 180, 270, 360]
+        self.angles = [45, 90]
         self.timer = 0.0
         # self.times = [1.5, 5, 3, 4]
-        self.times = [1, 1, 1, 1, 1]
+        self.times = [2, 2]
         #self.global_timer = 0
 
 
@@ -160,8 +160,8 @@ class MockStateMachineNode(Node):
         norm_speed = 0 #no decel
         #self.global_timer += self.dT
 
-        if self.target_align and self.count < 5:
-            if abs(self.angles[self.count] - self.current_angle) > 6:
+        if self.target_align and self.count < 2:
+            if abs(self.angles[self.count] - self.current_angle) > 10:
                 #*** turn to face self.target["angle"] here: 
                 gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                 gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
