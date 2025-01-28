@@ -71,6 +71,8 @@ class StateMachineNode(Node):
         self.red_counter = 0
         self.elevator_timer_count = 0
         self.duck_timer_count = 0
+        self.crook_timer_count = 0
+        self.dumptruck_timer_count = 0
         self.elevator = False
         self.dumptruck = False
         self.duck = False
@@ -81,7 +83,8 @@ class StateMachineNode(Node):
         self.angle3_elev = 90
         self.angle4_flap = 35
         self.intake_timer_count = 0
-        self.do_next_thing = False
+        self.moved = False
+
 
         self.competition_timer_count = 0
 
@@ -253,14 +256,7 @@ class StateMachineNode(Node):
                     self.scan_blocks = False
 
             #TODO: block intake, elevator, bird, dumptruck
-            #0) grab sphere if not already
-            #main sequence:
-            #1) add colors to queue, bottom up
-            #2) knock over blocks
-            #3) intake blocks
-            #-> if red, flip flap, activate bird
-            #-> if green, flip flap, activate elevator
-            #4) scan for objects, find closest, turn to face, drive to object
+
             
             if self.block_intake:
                 # queue = self.current_stack
@@ -284,84 +280,76 @@ class StateMachineNode(Node):
 
                 else:
                     # self.get_logger().info("done with frist sphere, grabbing stack")
-                    # self.angle4_flap = -90 if queue[0]["type"] == 'green' else 0 # set flap to open if green, closed if red
+                
 
                     # deltaL = deltaR = 30
+
                     
                     # deltaL = deltaR = 0 #go forwards a little here (ex. 1 sec) to have it move forward enough so that red block would be flush against flap and would knock stack over
+                    
+                    if self.moved:
+                        if queue[1]["type"] == 'green': # or self.first_sphere_grabbed == False: ...do sphere flag separately
+                            #sequence here for red then green
+                            if self.intake_timer_count < 200:
+                                self.intake_timer_count +=1
+                                self.activate_bird()
+                            if self.intake_timer_count >= 200 and self.intake_timer_count < 300:
+                                norm_speed = 30
+                                self.intake_timer_count +=1
+                            if self.intake_timer_count >= 300 and self.intake_timer_count < 1500:
+                                norm_speed = 0
+                                self.activate_elevator()
+                            if self.intake_timer_count >= 1500:
+                                self.block_intake = False
+                                # self.scan_270_active = True
+                            
+                                
 
-                    if queue[1]["type"] == 'green': # or self.first_sphere_grabbed == False: ...do sphere flag separately
-                        #sequence here for red then green
+                        elif queue[1]["type"] == 'red':
+                            self.get_logger().info(f"in stack queue: {queue[0]["type"]} {queue[1]["type"]}")
+                            #seqeunce here for green then red
+                            # self.elevator = True
+                            if self.intake_timer_count < 1200:
+                                self.activate_elevator()
+                                self.intake_timer_count +=1
+
+                            if self.intake_timer_count >= 1200 and self.intake_timer_count < 1300: #10-13 seconds
+                                norm_speed = 30 #move forward some so red is flush with flap
+                                self.intake_timer_count+=1
+                            
+                            if self.intake_timer_count >= 1300 and self.intake_timer_count < 1500:
+                                norm_speed = 0
+                                # deltaL = deltaR = 0 #stop
+                                self.activate_bird()
+
+                                self.intake_timer_count+=1
+
+
+                            if self.intake_timer_count >= 1500:
+                                self.block_intake = False
+                                # self.scan_270_active = True
+
+                        elif queue[0]["type"] == 'green':
+                            #sequence here for green only
+                            self.activate_elevator()
+                            self.block_intake = False
+                            # self.scan_270_active = True
+
+                        elif queue[0]["type"] == 'red':
+                            #sequence here for red only
+                            self.activate_bird()
+                            self.block_intake = False
+                            # self.scan_270_active = True
+                    else:
                         if self.intake_timer_count < 200:
                             self.intake_timer_count +=1
-                            self.activate_bird()
-                        if self.intake_timer_count >= 200 and self.intake_timer_count < 300:
                             norm_speed = 30
-                            self.intake_timer_count +=1
-                        if self.intake_timer_count >= 300 and self.intake_timer_count < 1500:
+                        else:
                             norm_speed = 0
-                            self.activate_elevator()
-                        if self.intake_timer_count >= 1500:
-                            self.block_intake = False
-                            # self.scan_270_active = True
-                        
-                            
+                            self.intake_timer_count += 1
+                            self.moved = True
 
-                    elif queue[1]["type"] == 'red':
-                        self.get_logger().info(f"in stack queue: {queue[0]["type"]} {queue[1]["type"]}")
-                        #seqeunce here for green then red
-                        # self.elevator = True
-                        if self.intake_timer_count < 1200:
-                            self.activate_elevator()
-                            self.intake_timer_count +=1
-
-                        if self.intake_timer_count >= 1200 and self.intake_timer_count < 1300: #10-13 seconds
-                            norm_speed = 30 #move forward some so red is flush with flap
-                            self.intake_timer_count+=1
-                        
-                        if self.intake_timer_count >= 1300 and self.intake_timer_count < 1500:
-                            norm_speed = 0
-                            # deltaL = deltaR = 0 #stop
-                            self.activate_bird()
-
-                            self.intake_timer_count+=1
-
-
-                        if self.intake_timer_count >= 1500:
-                            self.block_intake = False
-                            # self.scan_270_active = True
-
-
-                        # if self.do_next_thing: #10 seconds
-                        #     self.get_logger().info("doing next thing")
-                        #     deltaL = deltaR = 30 #move forward some so red is flush with flap
-                        #     time.sleep(1)
-                        #     deltaL = deltaR = 0 #stop
-                        #     # self.duck = True
-                        #     self.activate_bird()
-                            
-
-                    elif queue[0]["type"] == 'green':
-                        #sequence here for green only
-                        self.elevator = True
-                        self.block_intake = False
-                        self.scan_270_active = True
-
-                    elif queue[0]["type"] == 'red':
-                        #sequence here for red only
-                        self.duck = True
-                        self.block_intake = False
-                        self.scan_270_active = True
             
-
-            if self.dumptruck:
-                self.activate_dumptruck()
-            if self.elevator:
-                self.activate_elevator()
-            if self.duck:
-                self.activate_bird()
-            if self.crook:
-                self.activate_crook()
 
             #default: if too close to wall, this state pops up, overrides any state controls
             #TODO some maneuvering mechanism to get aligned with the wall
@@ -595,15 +583,20 @@ class StateMachineNode(Node):
     def activate_dumptruck(self):
         motor_msg = MotorCommand()
         if self.dumptruck == True:
-            #some way to drive to purple wall
-            motor_msg.drive_motors.dt_speed = 30 
-            time.sleep(1)
-            motor_msg.drive_motors.dt_speed = 0
-            time.sleep(1)
-            motor_msg.drive_motors.dt_speed = -30
-            time.sleep(1)
-            motor_msg.drive_motors.dt_speed = 0
-            self.dumptruck = False
+            #some way to drive to orange wall
+        
+            if self.dumptruck_timer_count < 200: #2 second
+                motor_msg.drive_motors.dt_speed = 30
+                self.dumptruck_timer_count += 1
+            if self.dumptruck_timer_count >= 200 and self.dumptruck_timer_count < 300: #1 second
+                motor_msg.drive_motors.dt_speed = 0
+                self.dumptruck_timer_count += 1
+            if self.dumptruck_timer_count >= 300 and self.dumptruck_timer_count < 500: #2 second
+                motor_msg.drive_motors.dt_speed = -30
+                self.dumptruck_timer_count += 1
+            if self.dumptruck_timer_count >= 500: 
+                motor_msg.drive_motors.dt_speed = 0
+                self.dumptruck = False
 
 
 
@@ -612,21 +605,20 @@ class StateMachineNode(Node):
         dc = motor_msg.drive_motors
         if self.crook == True:
             self.get_logger().info("activating crook")
-            dc.dt_speed = -10
-            self.elevator_timer_count += 1
-
-            if self.elevator_timer_count >= 100: #1 second
+            if self.crook_timer_count < 200:
+                dc.dt_speed = -10
+                self.elevator_timer_count += 1
+            if self.crook_timer_count >= 200 and self.crook_timer_count < 250: #1 second
                 dc.dt_speed = 0
                 dc.left_speed = -10
                 dc.right_speed = -10
-            if self.elevator_timer_count >= 150: #.5 sec
+                self.elevator_timer_count += 1
+            if self.crook_timer_count >= 250: #.5 sec
                 dc.left_speed = 0
                 dc.right_speed = 0
-                #probably have to move forward again
-                self.activate_elevator()
+                self.activate_elevator() #will move forward in function
                 self.first_sphere_grabbed = True
-            
-            self.crook =False
+                self.crook = False
 
 
 
