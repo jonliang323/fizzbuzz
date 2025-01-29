@@ -35,7 +35,7 @@ class CubeDetectNode(Node):
         if not self.frame:
             self.get_logger().info('Waiting on frame to be published by camera')
             return
-        if scan_msg.wall.data:
+        if scan_msg.wall:
             cur_frame = self.bridge.compressed_imgmsg_to_cv2(self.frame, "bgr8")
             #preprocess to get rid of pixels above blue tape
             hsv = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2HSV)
@@ -97,7 +97,7 @@ class CubeDetectNode(Node):
             wall_info_msg.height_range = int(orange_height_range)
             self.wall_info_pub.publish(wall_info_msg)
 
-            if scan_msg.yolo.data:
+            if scan_msg.yolo:
                 ##
                 # Now, feed into model for classification and bounding box
                 ##
@@ -138,7 +138,7 @@ class CubeDetectNode(Node):
                     # covered.append((x1,x2,y1,y2))
 
                     #save image!
-                    if scan_msg.save.data:
+                    if scan_msg.save:
                         if obj_type == 0: #green
                             color = (0,255,0)
                         elif obj_type == 1: #red
@@ -154,7 +154,7 @@ class CubeDetectNode(Node):
                     x_left_list.append(x1)
                     y_top_list.append(y1)
 
-                if scan_msg.save.data:
+                if scan_msg.save:
                     self.get_logger().info(f"{cv2.imwrite(f"./pics/{self.saved_frames}.jpg", cur_frame)} picture {self.saved_frames}")
                     self.saved_frames += 1
 

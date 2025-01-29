@@ -46,6 +46,7 @@ class StateMachineNode(Node):
         self.yolo_scan = False
         self.save_scan = False
         self.detected_objects = []
+        self.detected_stacks = []
         self.stack_counter = 0
         self.error_deriv = 0
 
@@ -141,7 +142,10 @@ class StateMachineNode(Node):
                 #obj has descriptors: distance, angle, x_center, type
                 rel_angle = math.atan((self.FOV_XY[0]/2 - self.x_centers[closest])/self.FOCAL_X)*180/math.pi
                 closest_obj = {"size":self.sizes[closest], "angle":int(self.current_angle + rel_angle), "type":self.CLASSES[self.obj_types[closest]]}
+                current_stack = self.find_stack(closest, closest_obj, self.x_centers, self.y_centers, self.sizes, self.obj_types)
                 self.detected_objects.append(closest_obj)
+                self.detected_stacks.append(current_stack)
+                self.get_logger().info(f'closest stack in frame: {current_stack}')
                 #otherwise, detected objects is not changed
                 self.yolo_scan = False
                 self.save_scan = False
@@ -203,14 +207,17 @@ class StateMachineNode(Node):
                         angle_err = self.turn_angle - self.current_angle
                         deltaL, deltaR = self.PID(angle_err, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
                         self.prev_error_turn = angle_err
+
                     elif not self.yolo_scan: #just finished turning, next yolo scan
-                        deltaL = deltaR = 0
                         self.yolo_scan = True
                         self.save_scan = True
-                        self.turn_angle += 40
-                        self.scan_timer +=1
 
+                    else:
+                        deltaL = deltaR = 0
+                        self.scan_timer +=1
                         if self.scan_timer >= 75: #.75 seconds
+                            self.get_logger().info('exiting to next turn')
+                            self.yolo_scan = False
                             self.turn_angle += 40
                             self.scan_timer = 0
                 else: #scan is complete
@@ -221,7 +228,7 @@ class StateMachineNode(Node):
                     if len(self.detected_objects) > 0:
                         closest = self.find_closest_index([obj["size"] for obj in self.detected_objects])
                         self.target = self.detected_objects[closest]
-                        self.current_stack = self.find_stack(closest, self.target, self.x_centers, self.y_centers, self.sizes, self.obj_types)
+                        self.current_stack = self.detected_stacks[closest]
                         self.get_logger().info(f'detected stack: {self.current_stack}') #here
                         self.get_logger().info(f'\n\n scan complete, closest object is {self.target["type"]},\nat an angle of {self.target["angle"]}')
                         self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
@@ -265,6 +272,7 @@ class StateMachineNode(Node):
 
             # PID alignment, while still or driving; cube to align to should depend on recorded angle
             if self.target_drive:
+                self.get_logger().info(f'closest stack overall: {self.current_stack}')
                 type = self.current_stack[0]['type']
                 b_index = self.find_closest_index(self.sizes,types=self.obj_types, filter_type=type)
                 target_y_top, target_x_left = self.y_tops[b_index], self.x_lefts[b_index]
@@ -275,7 +283,7 @@ class StateMachineNode(Node):
                     gainsR = (self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive)
 
                     pixel_error = self.X_ALIGN - target_x_left
-                    deltaL, deltaR = self.PID(angle_error, self.prev_error_drive, self.error_integralL_drive, self.error_integralR_drive, gainsL, gainsR)
+                    deltaL, deltaR = self.PID(pixel_error, self.prev_error_drive, self.error_integralL_drive, self.error_integralR_drive, gainsL, gainsR)
                     # deltaL = deltaR = 0
                     norm_speed = self.NORM_SPEED
                     self.prev_error_drive = pixel_error
@@ -423,6 +431,8 @@ class StateMachineNode(Node):
         scan_msg.yolo = self.yolo_scan
         scan_msg.save = self.save_scan
 
+        self.get_logger().info(f'{self.yolo_scan}')
+
         self.cv_pub.publish(scan_msg)
         self.motor_pub.publish(motor_msg)
 
@@ -443,6 +453,7 @@ class StateMachineNode(Node):
     def find_stack(self, index_of_closest, closest_obj, x_centers, y_centers, sizes, obj_types):
         #find stack of blocks
         stack_partner_index = None
+        self.get_logger().info(f'x_centers: {x_centers}, index of closest: {index_of_closest}')
         for x in x_centers:
             diff = int(x - x_centers[index_of_closest])
             if diff < 50 and x_centers.index(x) != index_of_closest: #difference of 20 pixels
