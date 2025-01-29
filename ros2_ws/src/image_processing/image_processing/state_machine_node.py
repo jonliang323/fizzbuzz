@@ -66,6 +66,7 @@ class StateMachineNode(Node):
         self.block_screen_ratio = 0
         self.wall_height_screen_ratio = 0
         self.orange_tape_ratio = 0
+        self.orange_wall_found = False
 
         #elevator variables
         self.block_intake = False
@@ -86,6 +87,7 @@ class StateMachineNode(Node):
         self.angle4_flap = 35
         self.intake_timer_count = 0
         self.moved = False
+        self.dumptruck_state = 'turning'
 
 
         self.competition_timer_count = 0
@@ -138,6 +140,7 @@ class StateMachineNode(Node):
     def scan_wall_callback(self, msg: WallInfo):
         self.wall_height_screen_ratio = msg.avg_height/self.FOV_XY[1]
         self.orange_tape_ratio = msg.orange_tape_ratio
+        self.height_range = msg.height_range
 
     def delta_encoder_callback(self, msg: EncoderCounts):
         self.delta_encoderL = msg.encoder1
@@ -207,8 +210,8 @@ class StateMachineNode(Node):
                         self.scan_blocks = False
                         self.get_logger().info('found no objects')
                     else:
-                        pass
-                        #self.dumptruck=True
+                        self.activate_dumptruck()
+
                     self.get_logger().info(f'These are our objects: {self.detected_objects}')
 
             if self.target_align:
@@ -458,6 +461,21 @@ class StateMachineNode(Node):
         #     self.current_pos = (self.current_pos[0] - dx*(29/25), self.current_pos[1] + dy*(29/25))
         self.current_angle = self.modulate_angle(self.current_angle + round((dtheta*180/math.pi),2)) #CAN BE IN ABOVE IF STATEMENT
 
+    def find_orange_wall(self):
+        motor_msg = MotorCommand()
+        wall_info_msg = WallInfo()
+        dc = motor_msg.drive_motors
+        if self.orange_tape_ratio > 0.75 and wall_info_msg.height_range < 10:
+            dc.left_speed = 0
+            dc.right_speed = 0
+            self.orange_wall_found = True
+        else:
+            dc.left_speed = 30
+            dc.right_speed = -30
+        
+
+
+
     def modulate_angle(self, angle):
         if angle > 0:
             return angle%360 if angle > 360 else angle
@@ -592,25 +610,47 @@ class StateMachineNode(Node):
                 self.duck = True
             
     
-    #
-    # TODO: implement dumptruck
     def activate_dumptruck(self):
         motor_msg = MotorCommand()
         if self.dumptruck == True:
             #some way to drive to orange wall
+            if self.dumptruck_state == 'turning':
+                if self.orange_wall_found == False:
+                    self.find_orange_wall()
         
-            if self.dumptruck_timer_count < 200: #2 second
-                motor_msg.drive_motors.dt_speed = 30
-                self.dumptruck_timer_count += 1
-            if self.dumptruck_timer_count >= 200 and self.dumptruck_timer_count < 300: #1 second
-                motor_msg.drive_motors.dt_speed = 0
-                self.dumptruck_timer_count += 1
-            if self.dumptruck_timer_count >= 300 and self.dumptruck_timer_count < 500: #2 second
-                motor_msg.drive_motors.dt_speed = -30
-                self.dumptruck_timer_count += 1
-            if self.dumptruck_timer_count >= 500: 
-                motor_msg.drive_motors.dt_speed = 0
-                self.dumptruck = False
+                else:
+                    self.dumptruck_state = 'driving'
+                    self.dumptruck_timer_count = 0
+
+            if self.dumptruck_state == 'driving':
+                if self.wall_height_screen_ratio < 0.7: #0.7 is placeholder
+                    motor_msg.drive_motors.left_speed = 30
+                    motor_msg.drive_motors.right_speed = 30
+                else:
+                    if self.dumptruck_timer_count < 50: #0.5 second:
+                        motor_msg.drive_motors.left_speed = -30
+                        motor_msg.drive_motors.right_speed = 30
+                        self.dumptruck_timer_count += 1
+                    else:
+                        motor_msg.drive_motors.left_speed = 0
+                        motor_msg.drive_motors.right_speed = 0
+                        self.dumptruck_state = 'dumping'
+                        self.dumptruck_timer_count = 0
+
+
+            if self.dumptruck_state == 'dumping':
+                if self.dumptruck_timer_count < 200: #2 second
+                    motor_msg.drive_motors.dt_speed = 30
+                    self.dumptruck_timer_count += 1
+                if self.dumptruck_timer_count >= 200 and self.dumptruck_timer_count < 300: #1 second
+                    motor_msg.drive_motors.dt_speed = 0
+                    self.dumptruck_timer_count += 1
+                if self.dumptruck_timer_count >= 300 and self.dumptruck_timer_count < 500: #2 second
+                    motor_msg.drive_motors.dt_speed = -30
+                    self.dumptruck_timer_count += 1
+                if self.dumptruck_timer_count >= 500: 
+                    motor_msg.drive_motors.dt_speed = 0
+                    self.dumptruck = False
 
 
 
