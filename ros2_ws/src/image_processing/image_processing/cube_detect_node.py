@@ -76,9 +76,20 @@ class CubeDetectNode(Node):
             avg_boundary_pixel = avg_boundary_pixel//col
             otr = len(orange_locs)/len(all_locs)
 
+        min_o_height = float('inf')
+        max_o_height = float('-inf')
+        for loc in orange_locs:
+            if loc[0] < min_o_height:
+                min_o_height = loc[0]
+            if loc[0] > max_o_height:
+                max_o_height = loc[0]
+        orange_height_range = max_o_height - min_o_height
+
+
         wall_info_msg = WallInfo()
         wall_info_msg.orange_tape_ratio = otr
         wall_info_msg.avg_height = avg_boundary_pixel
+        wall_info_msg.height_range = orange_height_range
         self.wall_info_pub.publish(wall_info_msg)
 
         if scan_blocks: #if we want to look for blocks too
