@@ -125,6 +125,7 @@ class StateMachineNode(Node):
                 closest_obj = {"size":sizes[closest], "angle":self.current_angle + rel_angle, "type":self.CLASSES[obj_types[closest]]}
                 self.current_stack = self.find_stack(closest, closest_obj)
                 self.detected_objects.append(closest_obj)
+                self.get_logger().info(f'detected: {self.detected_objects}')
             #otherwise, detected objects is not changed
         elif self.target_drive:
             #find block screen ratio
@@ -141,7 +142,7 @@ class StateMachineNode(Node):
     def delta_encoder_callback(self, msg: EncoderCounts):
         self.delta_encoderL = msg.encoder1
         self.delta_encoderR = msg.encoder2
-        #self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}')
+        self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}') #here
         #only update angle here, after encoder deltas have been sent, to be read once per cycle
         self.update_angle_and_pos()
         #self.get_logger().info(f'current_angle: {self.current_angle}')
@@ -172,7 +173,7 @@ class StateMachineNode(Node):
                 if self.turn_angle <= 270:
                     #turns 270 degrees
                     #scan_blocks is initially true
-                    #self.get_logger().info(f'angle: {self.current_angle - self.turn_angle}')
+                    self.get_logger().info(f'angle: {self.current_angle - self.turn_angle}') #here
                     if not self.scan_blocks and abs(self.current_angle - self.turn_angle) > 5: #ccw turn, + angle
                         gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                         gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
