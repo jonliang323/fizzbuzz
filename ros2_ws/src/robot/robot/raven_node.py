@@ -1,8 +1,8 @@
 import rclpy
-from rclpy.node import Node
 from raven import Raven
-from image_processing_interfaces.msg import MotorCommand
-from image_processing_interfaces.msg import EncoderCounts
+from rclpy.node import Node
+from robot.msg import EncoderCounts, MotorCommand
+
 
 class RavenNode(Node):
     def __init__(self):

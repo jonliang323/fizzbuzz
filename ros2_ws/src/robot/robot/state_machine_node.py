@@ -1,12 +1,14 @@
-import rclpy
-from rclpy.node import Node
-from rclpy.clock import Clock
-from icm42688 import ICM42688
 import math
+import time
+
 import board
 import busio
-import time
-from image_processing_interfaces.msg import CubeTracking, EncoderCounts, MotorCommand, WallInfo, CVStates
+import rclpy
+from icm42688 import ICM42688
+from rclpy.clock import Clock
+from rclpy.node import Node
+from robot.msg import CubeTracking, CVStates, EncoderCounts, MotorCommand, WallInfo
+
 
 class StateMachineNode(Node):
     def __init__(self):

@@ -1,9 +1,9 @@
-import rclpy
-from rclpy.node import Node
-from rclpy.clock import Clock
-from image_processing_interfaces.msg import CubeTracking
-from image_processing_interfaces.msg import MotorCommand
 import keyboard
+import rclpy
+from rclpy.clock import Clock
+from rclpy.node import Node
+from robot.msg import CubeTracking, MotorCommand
+
 
 class ElevatorTestNode(Node): #testing elevator and duck
     def __init__(self):

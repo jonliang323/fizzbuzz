@@ -1,11 +1,13 @@
+import os
+
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
-import os
-from ament_index_python.packages import get_package_share_directory
+
 
 def generate_launch_description():
     camera_cal_path = os.path.join(
-        get_package_share_directory("image_processing"), "config", "brio_101.yaml"
+        get_package_share_directory("robot"), "config", "brio_101.yaml"
     )
 
     v4l2_camera_node = Node(
@@ -22,19 +24,19 @@ def generate_launch_description():
     )
 
     cube_detect_node = Node(
-        package='image_processing',
+        package='robot',
         executable='cube_detect_subscriber',
         output='screen'
     )
 
     state_machine_node = Node(
-        package = 'image_processing',
+        package = 'robot',
         executable = 'state_machine',
         output = 'screen'
     )
 
     raven_node = Node(
-        package='image_processing',
+        package='robot',
         executable='raven_subscriber',
         output='screen'
     )
@@ -45,13 +47,13 @@ def generate_launch_description():
     
 
 #     raven_node = Node(
-#         package='image_processing',
+#         package='robot',
 #         executable='raven_subscriber',
 #         output='screen'
 #     )
 
 #     test_elevator_node = Node(
-#         package='image_processing',
+#         package='robot',
 #         executable='test_elevator_subscriber',
 #         output='screen'
 #     )
