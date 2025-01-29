@@ -61,6 +61,7 @@ class RavenNode(Node):
         # self.get_logger().info(f'{right_speed, left_speed}')
         
         self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH3, dt_speed, reverse=dt_rev)
+        self.get_logger().info(f'{dt_speed}')
 
         # Torque controlled:
         # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, 100) # Make motor try to run at max speed forward
@@ -89,6 +90,7 @@ def destroy_node(self):
     # Stop the motors before shutting down
     self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, 0, reverse=False)
     self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH4, 0, reverse=False)
+    self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH3, 0, reverse=False)
     super().destroy_node()  # Call the parent class destroy_node
 
 def main(args=None):
