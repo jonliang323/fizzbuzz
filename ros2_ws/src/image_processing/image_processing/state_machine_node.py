@@ -69,8 +69,8 @@ class StateMachineNode(Node):
         self.orange_wall_found = False
 
         #elevator variables
-        self.block_intake = False
-        self.first_sphere_grabbed = True
+        self.block_intake = False #True
+        self.first_sphere_grabbed = False
         self.red_counter = 0
         self.elevator_timer_count = 0
         self.duck_timer_count = 0
@@ -87,7 +87,8 @@ class StateMachineNode(Node):
         self.angle4_flap = 35
         self.intake_timer_count = 0
         self.moved = False
-        self.dumptruck_state = 'turning'
+        self.dumptruck_state = 'dumping'
+        self.dt_speed = 0
 
 
         self.competition_timer_count = 0
@@ -127,7 +128,7 @@ class StateMachineNode(Node):
                 closest_obj = {"size":sizes[closest], "angle":self.current_angle + rel_angle, "type":self.CLASSES[obj_types[closest]]}
                 self.current_stack = self.find_stack(closest, closest_obj)
                 self.detected_objects.append(closest_obj)
-                self.get_logger().info(f'detected: {self.detected_objects}')
+                self.get_logger().info(f'detected: {self.detected_objects}') #here
             #otherwise, detected objects is not changed
         elif self.target_drive:
             #find block screen ratio
@@ -165,7 +166,7 @@ class StateMachineNode(Node):
             norm_speed = 0 #no decel
             
             if self.camera_startup:
-                if self.competition_timer_count > 300:
+                if self.competition_timer_count > 200:
                     self.get_logger().info('entered main seq')
                     self.camera_startup = False
                     self.scan_270_active = True
@@ -176,7 +177,7 @@ class StateMachineNode(Node):
                 if self.turn_angle <= 270:
                     #turns 270 degrees
                     #scan_blocks is initially true
-                    self.get_logger().info(f'angle: {self.current_angle - self.turn_angle}') #here
+                    self.get_logger().info(f'angle diff: {self.current_angle - self.turn_angle}') #here
                     if not self.scan_blocks and abs(self.current_angle - self.turn_angle) > 5: #ccw turn, + angle
                         gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                         gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
@@ -285,14 +286,16 @@ class StateMachineNode(Node):
                     self.get_logger().info("grabbing first sphere")
                     # self.crook = True
                     # deltaL = deltaR = 30
-                    self.crook = False
+                    
                     # self.activate_crook()
                     # self.duck = True
                     # self.elevator = True
-                    self.activate_bird()
+                    self.activate_dumptruck()
                     #move forward a little bit
                     # self.elevator = True
                     # self.first_sphere_grabbed = True
+                    if self.dumptruck == True:
+                        self.block_intake = False
 
 
                 else:
@@ -394,6 +397,7 @@ class StateMachineNode(Node):
         #self.get_logger().info(f'{norm_speed, deltaL, deltaR}')
         dc.left_speed = int(norm_speed + deltaL)
         dc.right_speed = int(norm_speed + deltaR)
+        dc.dt_speed = self.dt_speed
         servo.angle1_duck = self.angle1_duck
         servo.angle2_claw = self.angle2_claw
         servo.angle3_elev = self.angle3_elev
@@ -612,7 +616,8 @@ class StateMachineNode(Node):
     
     def activate_dumptruck(self):
         motor_msg = MotorCommand()
-        if self.dumptruck == True:
+        self.get_logger().info("activate dumptruck")
+        if self.dumptruck == False:
             #some way to drive to orange wall
             if self.dumptruck_state == 'turning':
                 if self.orange_wall_found == False:
@@ -639,18 +644,25 @@ class StateMachineNode(Node):
 
 
             if self.dumptruck_state == 'dumping':
+                self.get_logger().info("enter dump state")
                 if self.dumptruck_timer_count < 200: #2 second
-                    motor_msg.drive_motors.dt_speed = 30
+                    self.get_logger().info("in first stage")
+                    self.dt_speed = -80
                     self.dumptruck_timer_count += 1
                 if self.dumptruck_timer_count >= 200 and self.dumptruck_timer_count < 300: #1 second
-                    motor_msg.drive_motors.dt_speed = 0
+                    self.get_logger().info("in second stage")
+                    self.dt_speed = 0
                     self.dumptruck_timer_count += 1
                 if self.dumptruck_timer_count >= 300 and self.dumptruck_timer_count < 500: #2 second
-                    motor_msg.drive_motors.dt_speed = -30
+                    self.get_logger().info("in third stage")
+                    self.dt_speed = 80
                     self.dumptruck_timer_count += 1
                 if self.dumptruck_timer_count >= 500: 
-                    motor_msg.drive_motors.dt_speed = 0
-                    self.dumptruck = False
+                    self.get_logger().info("in fourth stage")
+                    self.dt_speed = 0
+                    self.dumptruck = True
+
+        return motor_msg
 
 
 
