@@ -6,15 +6,14 @@ import math
 import board
 import busio
 import time
-from image_processing_interfaces.msg import CubeTracking, EncoderCounts, MotorCommand, WallInfo
-from std_msgs.msg import Bool
+from image_processing_interfaces.msg import CubeTracking, EncoderCounts, MotorCommand, WallInfo, CVStates
 
 class StateMachineNode(Node):
     def __init__(self):
         super().__init__('state_machine')
         self.dT = 0.01 #seconds
         self.clock = Clock()
-        self.timer = 0.0
+        #self.timer = 0.0
 
         self.FOV_XY = 640,480
         self.FOCAL_X = 888.54513
@@ -40,8 +39,11 @@ class StateMachineNode(Node):
         self.camera_startup = True
 
         # 360 scan variables
-        self.scan_270_active = True
-        self.scan_blocks = False
+        self.scan_270_active = False
+        #each of the following three depends on the one above it to be true
+        self.wall_scan = False
+        self.yolo_scan = False
+        self.save_scan = False
         self.detected_objects = []
         self.stack_counter = 0
         self.error_deriv = 0
@@ -61,6 +63,15 @@ class StateMachineNode(Node):
         #gains should result in critical damping, best response
         self.p_gainL_drive, self.i_gainL_drive, self.d_gainL_drive = 0.5,0.01,0.1
         self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive = 0.5,0.01,0.1
+
+        self.target = None
+        self.target_x_left = None
+        self.obj_types = None
+        self.sizes = None
+        self.x_centers = None
+        self.y_centers = None
+        self.x_lefts = None
+        self.y_tops = None
 
         self.block_screen_ratio = 0
         self.wall_height_screen_ratio = 0
@@ -97,7 +108,7 @@ class StateMachineNode(Node):
         self.delta_encoder_sub = self.create_subscription(EncoderCounts, "delta_encoder_info", self.delta_encoder_callback, 10)
         self.state_machine = self.create_timer(self.dT, self.state_machine_callback)
         self.motor_pub = self.create_publisher(MotorCommand, "motor_command", 10)
-        self.cv_pub = self.create_publisher(Bool, "scan_blocks", 10) #tells cv if we want to scan blocks
+        self.cv_pub = self.create_publisher(CVStates, "scan_blocks", 10) #tells cv if we want to scan blocks
 
         #imu initialization
         spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
@@ -113,30 +124,32 @@ class StateMachineNode(Node):
     def scan_block_callback(self, msg: CubeTracking):
         self.get_logger().info(f'Requested cube scan')
         #enter here when scan_blocks is true
-        obj_types = msg.obj_types
-        sizes = msg.sizes
-        x_centers = msg.x_centers
-        y_centers = msg.y_centers
-        block_pixels = msg.block_pixels
+        self.obj_types = msg.obj_types
+        self.sizes = msg.sizes
+        self.x_centers = msg.x_centers
+        self.y_centers = msg.y_centers
+        self.x_lefts = msg.x_lefts
+        self.y_tops = msg.y_tops
+        #block_pixels = msg.block_pixels
 
-        #two cases when we want to scan the blocks (run YOLO classification)
-        if self.scan_270_active: #shouldn't this be if self.scan?
-            #obj has descriptors: distance, angle, x_center, type
-            if len(obj_types) > 0:
-                closest = self.find_closest_index(sizes)
-                rel_angle = math.atan((self.FOV_XY[0]/2 - x_centers[closest])/self.FOCAL_X)*180/math.pi
-                closest_obj = {"size":sizes[closest], "angle":int(self.current_angle + rel_angle), "type":self.CLASSES[obj_types[closest]]}
-                self.current_stack = self.find_stack(closest, closest_obj, x_centers, y_centers, sizes, obj_types)
+        if len(self.obj_types) > 0:
+            closest = self.find_closest_index(self.sizes)
+            #two cases so far when we want to do something with the cv data
+            if self.scan_270_active: #shouldn't this be if self.scan?
+                #obj has descriptors: distance, angle, x_center, type
+                rel_angle = math.atan((self.FOV_XY[0]/2 - self.x_centers[closest])/self.FOCAL_X)*180/math.pi
+                closest_obj = {"size":self.sizes[closest], "angle":int(self.current_angle + rel_angle), "type":self.CLASSES[self.obj_types[closest]]}
                 self.detected_objects.append(closest_obj)
-                self.get_logger().info(f'detected stack: {self.current_stack}') #here
-            #otherwise, detected objects is not changed
-        elif self.target_drive:
-            #find block screen ratio
-            if len(obj_types) > 0:
-                self.block_screen_ratio = block_pixels/(self.FOV_XY[0]*self.FOV_XY[1])
-            else:
-                self.block_screen_ratio = 0
-        self.scan_blocks = False
+                #otherwise, detected objects is not changed
+                self.yolo_scan = False
+                self.save_scan = False
+            elif self.target_drive:
+                #self.block_screen_ratio = block_pixels/(self.FOV_XY[0]*self.FOV_XY[1]) #find block screen ratio
+                #find, record x_center of closest block -> used in pid driving to align blocks with intake
+                self.target_x_left = int(self.x_lefts[closest])
+                #keep on scanning, processing with yolo
+        # else:
+        #     self.block_screen_ratio = 0
 
     def scan_wall_callback(self, msg: WallInfo):
         self.wall_height_screen_ratio = msg.avg_height/self.FOV_XY[1]
@@ -170,15 +183,17 @@ class StateMachineNode(Node):
                     self.get_logger().info('entered main seq')
                     self.camera_startup = False
                     self.scan_270_active = True
-                    self.scan_blocks = True
+                    self.wall_scan = True
+                    self.yolo_scan = True
+                    self.save_scan = True
 
             if self.scan_270_active:
                 #spins full 270
-                if self.turn_angle <= 0: #320
+                if self.turn_angle <= 320: #320
                     #turns 270 degrees
                     #scan_blocks is initially true
                     self.get_logger().info(f'target: {self.turn_angle}, current: {self.current_angle}, angle diff: {self.turn_angle - self.current_angle}') #here
-                    if not self.scan_blocks and abs(self.current_angle - self.turn_angle) >14: #ccw turn, + angle
+                    if not self.yolo_scan and abs(self.current_angle - self.turn_angle) > 10: #ccw turn, + angle
                         
                         gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                         gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
@@ -186,32 +201,37 @@ class StateMachineNode(Node):
                         angle_err = self.turn_angle - self.current_angle
                         deltaL, deltaR = self.PID(angle_err, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
                         self.prev_error_turn = angle_err
-                    elif not self.scan_blocks: #self.current_angle matched self.turn_angle, still no scan
-                        self.scan_blocks = True
+                    elif not self.yolo_scan: #just finished turning, next yolo scan
+                        self.yolo_scan = True
+                        self.save_scan = True
                         self.turn_angle += 40
                 else: #scan is complete
-                    pass
-                    # deltaL = 0
-                    # deltaR = 0
-                    # #process list
-                    # if len(self.detected_objects) > 0:
-                    #     closest = self.find_closest_index([obj["size"] for obj in self.detected_objects])
-                    #     self.target = self.detected_objects[closest]
-                    #     self.get_logger().info(f'\n\n scan complete, closest object is {self.target["type"]},\nat an angle of {self.target["angle"]}')
-                    #     self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
-                    #     self.get_logger().info(f'These are our objects: {self.detected_objects}')
-                    #     self.detected_objects = []
-                    #     self.scan_270_active = False
-                    #     # self.target_align = True
-                    #     self.prev_error_turn = 0
-                    # elif len(self.detected_objects) == 0: #and self.stack_counter < 5:
-                    #     #TODO: if no cubes found while there are still cubes to be found --> scan again
-                    #     self.turn_angle = 0
-                    #     self.scan_blocks = False
-                    #     self.get_logger().info('found no objects')
-                    # else:
-                    #     self.get_logger().info('going to dump')
-                    #     # self.activate_dumptruck()
+                    #pass
+                    deltaL = 0
+                    deltaR = 0
+                    #process list
+                    if len(self.detected_objects) > 0:
+                        closest = self.find_closest_index([obj["size"] for obj in self.detected_objects])
+                        self.target = self.detected_objects[closest]
+                        self.current_stack = self.find_stack(closest, self.target, self.x_centers, self.y_centers, self.sizes, self.obj_types)
+                        self.get_logger().info(f'detected stack: {self.current_stack}') #here
+                        self.get_logger().info(f'\n\n scan complete, closest object is {self.target["type"]},\nat an angle of {self.target["angle"]}')
+                        self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
+                        self.get_logger().info(f'These are our objects: {self.detected_objects}')
+                        self.detected_objects = []
+                        self.scan_270_active = False
+                        # self.target_align = True
+                        self.yolo_scan = False
+                        self.save_scan = False
+                        self.prev_error_turn = 0
+                    elif len(self.detected_objects) == 0 and self.stack_counter < 5:
+                        #TODO: if no cubes found while there are still cubes to be found --> scan again
+                        self.turn_angle = 0
+                        self.yolo_scan = False #rotate first back to 0, then start scanning again
+                        self.get_logger().info('found no objects')
+                    else: #finished with stacks
+                        self.get_logger().info('going to dump')
+                        # self.activate_dumptruck()
 
             if self.target_align:
                 self.get_logger().info(f'aligning....target angle: {self.target['angle']}, current angle: {self.current_angle}')
@@ -227,48 +247,38 @@ class StateMachineNode(Node):
                     deltaL, deltaR = self.PID(angle_error, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
                     #self.get_logger().info(f'deltas: {deltaL, deltaR}')
                     self.prev_error_turn = angle_error
-
                 else:
                     #TODO constant scan for cube -> find % cube of screen -> have time delay? sparse scanning
                     deltaL = deltaR = 0
-                    self.scan_blocks = True
+                    self.yolo_scan = True #save_scan is still False for target_drive
                     self.target_align = False
                     self.target_drive = True
                     self.prev_error_turn = 0
 
             # PID alignment, while still or driving; cube to align to should depend on recorded angle
             if self.target_drive:
-                self.get_logger().info(f'block_screen_ratio: {self.block_screen_ratio}')
-                
-                if (self.block_screen_ratio < 0.8):
+                type = self.current_stack[0]['type']
+                b_index = self.find_closest_index(self.sizes,types=self.obj_types, filter_type=type)
+                if (self.y_tops[b_index] > self.Y_ALIGN): #drive condition
                 # if (self.timer < 2):
-                    self.timer += self.dT
+                    #self.timer += self.dT
                     gainsL = (self.p_gainL_drive, self.i_gainL_drive, self.d_gainL_drive)
                     gainsR = (self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive)
 
-                    angle_error = self.target['angle'] - self.current_angle
-                    # angle_error = self.turn_angle - self.current_angle
-                    # angle_error = 10
-                    if angle_error > 180:
-                        angle_error -= 360
-                    elif angle_error < -180:
-                        angle_error += 360
+                    pixel_error = self.X_ALIGN - self.target_x_left
                     deltaL, deltaR = self.PID(angle_error, self.prev_error_drive, self.error_integralL_drive, self.error_integralR_drive, gainsL, gainsR)
                     # deltaL = deltaR = 0
                     norm_speed = self.NORM_SPEED
-
-                    self.prev_errpr_drive = angle_error
+                    self.prev_error_drive = pixel_error
                 
                 else:
                     self.get_logger().info(f'self.target_drive stopped')
                     norm_speed = 0
+                    deltaL, deltaR = 0
+                    self.yolo_scan = False
                     self.target_drive = False
                     self.block_intake = True
                     self.prev_error_drive = 0
-                    self.scan_blocks = False
-
-
-
             
             if self.block_intake:
                 queue = self.current_stack
@@ -388,8 +398,6 @@ class StateMachineNode(Node):
         dc = motor_msg.drive_motors
         servo = motor_msg.actuate_motors
 
-        #self.get_logger().info(f"lW: {-norm_speed + deltaL}, rW: {-norm_speed + deltaR}")
-
         #set motor speeds
         # self.get_logger().info(f'speeds: {norm_speed, deltaL, deltaR}')
         dc.left_speed = int(norm_speed + deltaL)
@@ -400,23 +408,27 @@ class StateMachineNode(Node):
         servo.angle3_elev = self.angle3_elev
         servo.angle4_flap = self.angle4_flap
 
-        # self.get_logger().info(f'{dc.left_speed, dc.right_speed}')
+        scan_msg = CVStates()
+        scan_msg.wall = self.wall_scan
+        scan_msg.yolo = self.yolo_scan
+        scan_msg.save = self.save_scan
 
-
-        scan_msg = Bool()
-        scan_msg.data = self.scan_blocks
         self.cv_pub.publish(scan_msg)
         self.motor_pub.publish(motor_msg)
 
 
     
-    def find_closest_index(self, sizes):
+    def find_closest_index(self, sizes, types=None, filter_type=None):
         #find closest distance index (largest size)
-        max_s_i = 0
+        max_i = 0
         for i in range(1, len(sizes)):
-            if sizes[i] > sizes[max_s_i]:  
-                max_s_i = i
-        return max_s_i
+            if filter_type and types[i] == filter_type and sizes[i] > sizes[max_i]:
+                max_i = i
+            elif sizes[i] > sizes[max_i]:  
+                max_i = i
+        if filter_type and types[max_i] != filter_type:
+            self.get_logger().info(f'Error, color not found')
+        return max_i
     
     def find_stack(self, index_of_closest, closest_obj, x_centers, y_centers, sizes, obj_types):
         #find stack of blocks
