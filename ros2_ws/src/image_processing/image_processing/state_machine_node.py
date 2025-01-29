@@ -51,8 +51,8 @@ class StateMachineNode(Node):
         self.prev_error_turn = 0
         self.error_integralL_turn, self.error_integralR_turn= 0,0
         #gains should result in critical damping, best response
-        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 0.8,0.01,0.2
-        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 0.8,0.01,0.2
+        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 1.2,0.01,0.1
+        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 1.2,0.01,0.1
 
         #turn drive state, PID
         self.target_drive = False
@@ -143,8 +143,8 @@ class StateMachineNode(Node):
         self.height_range = msg.height_range
 
     def delta_encoder_callback(self, msg: EncoderCounts):
-        self.delta_encoderL = msg.encoder1
-        self.delta_encoderR = msg.encoder2
+        self.delta_encoderR = msg.encoder1
+        self.delta_encoderL = msg.encoder2
         #self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}') #here
         #only update angle here, after encoder deltas have been sent, to be read once per cycle
         self.update_angle_and_pos()
@@ -176,16 +176,13 @@ class StateMachineNode(Node):
                 if self.turn_angle <= 270:
                     #turns 270 degrees
                     #scan_blocks is initially true
-                    #self.get_logger().info(f'angle diff: {self.current_angle - self.turn_angle}') #here
+                    self.get_logger().info(f'target: {self.turn_angle}, angle diff: {self.turn_angle - self.current_angle}') #here
                     if not self.scan_blocks and abs(self.current_angle - self.turn_angle) > 10: #ccw turn, + angle
+                        
                         gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                         gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
 
                         angle_err = self.turn_angle - self.current_angle
-                        if angle_err > 180:
-                            angle_err -= 360
-                        elif angle_err < -180:
-                            angle_err += 360
                         deltaL, deltaR = self.PID(angle_err, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
                         self.prev_error_turn = angle_err
                     elif not self.scan_blocks: #self.current_angle matched self.turn_angle, still no scan
@@ -200,6 +197,7 @@ class StateMachineNode(Node):
                         self.target = self.detected_objects[closest]
                         self.get_logger().info(f'\n\n scan complete, closest object is {self.target["type"]},\nat an angle of {self.target["angle"]}')
                         self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
+                        self.get_logger().info(f'These are our objects: {self.detected_objects}')
                         self.detected_objects = []
                         self.scan_270_active = False
                         #self.target_align = True
@@ -212,8 +210,6 @@ class StateMachineNode(Node):
                     else:
                         self.activate_dumptruck()
 
-                    self.get_logger().info(f'These are our objects: {self.detected_objects}')
-
             if self.target_align:
                 #if abs(self.target['angle'] - self.current_angle) > 5:
                 if abs(self.turn_angle - self.current_angle) > 10:
@@ -221,12 +217,7 @@ class StateMachineNode(Node):
                     gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                     gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
 
-                    # angle_error = self.target['angle'] - self.current_angle
-                    angle_error = self.turn_angle - self.current_angle
-                    if angle_error > 180:
-                        angle_error -= 360
-                    elif angle_error < -180:
-                        angle_error += 360
+                    angle_err = (self.target['angle'] - self.current_angle + 180) % 360 - 180
 
                     #self.error_deriv = (angle_error - self.prev_error_turn)/self.dT
                     deltaL, deltaR = self.PID(angle_error, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)

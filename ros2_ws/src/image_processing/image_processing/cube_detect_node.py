@@ -25,6 +25,7 @@ class CubeDetectNode(Node):
 
         self.frame = None
         self.model = YOLO("image_processing/image_processing/yolo_weights/best.pt")
+        self.scanned_frames = 0
         
     def image_callback(self, msg: CompressedImage):
         self.frame = msg
@@ -94,8 +95,8 @@ class CubeDetectNode(Node):
         wall_info_msg.avg_height = int(avg_boundary_pixel)
         wall_info_msg.height_range = int(orange_height_range)
         self.wall_info_pub.publish(wall_info_msg)
-
-        if scan_blocks: #if we want to look for blocks too
+        
+        if scan_blocks.data: #if we want to look for blocks too
             ##
             # Now, feed into model for classification and bounding box
             ##
@@ -132,6 +133,16 @@ class CubeDetectNode(Node):
                 block_pixels += (size-new_box_overlap)
                 covered.append((x1,x2,y1,y2))
 
+                #save image!
+                if obj_type == 0: #green
+                    color = (0,255,0)
+                elif obj_type == 1: #red
+                    color = (0,0,255)
+                else:
+                    color = (255,0,0)
+                cv2.rectangle(cur_frame,(x1,y1),(x2,y2),color,2) #output bounding box
+                self.get_logger().info(f"{cv2.imwrite(f"./pics/{self.scanned_frames}.jpg", cur_frame)} picture {self.scanned_frames}")
+
                 obj_type_list.append(obj_type)
                 size_list.append(size)
                 x_center_list.append((x1+x2)//2)
@@ -144,6 +155,8 @@ class CubeDetectNode(Node):
             cube_info_msg.block_pixels = block_pixels
             cube_info_msg.y_centers = y_center_list
             self.cube_info_pub.publish(cube_info_msg)
+
+            self.scanned_frames += 1
     
 def main(args=None):
     rclpy.init()
