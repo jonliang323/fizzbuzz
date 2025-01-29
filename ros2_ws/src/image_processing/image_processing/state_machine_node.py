@@ -34,13 +34,13 @@ class StateMachineNode(Node):
 
         #heading, positioning variables
         self.current_angle = 0.0
-        self.turn_angle = 90
+        self.turn_angle = 40
         #self.current_pos = (0, 0)
 
         self.camera_startup = True
 
         # 360 scan variables
-        self.scan_270_active = False
+        self.scan_270_active = True
         self.scan_blocks = False
         self.detected_objects = []
         self.stack_counter = 0
@@ -51,8 +51,8 @@ class StateMachineNode(Node):
         self.prev_error_turn = 0
         self.error_integralL_turn, self.error_integralR_turn= 0,0
         #gains should result in critical damping, best response
-        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 1.2,0.01,0.1
-        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 1.2,0.01,0.1
+        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 1.5,0.01,0.1
+        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 1.5,0.01,0.1
 
         #turn drive state, PID
         self.target_drive = False
@@ -68,7 +68,7 @@ class StateMachineNode(Node):
         self.orange_wall_found = False
 
         #elevator variables
-        self.block_intake = True #True
+        self.block_intake = False #True
         self.first_sphere_grabbed = True
         self.red_counter = 0
         self.elevator_timer_count = 0
@@ -80,7 +80,7 @@ class StateMachineNode(Node):
         self.duck = False
         self.crook = False
         self.elevator_state = 'open claws'
-        self.angle1_duck = 70
+        self.angle1_duck = -65 #70
         self.angle2_claw = -20
         self.angle3_elev = 90
         self.angle4_flap = 35
@@ -174,11 +174,11 @@ class StateMachineNode(Node):
 
             if self.scan_270_active:
                 #spins full 270
-                if self.turn_angle <= 0:
+                if self.turn_angle <= 0: #320
                     #turns 270 degrees
                     #scan_blocks is initially true
-                    self.get_logger().info(f'target: {self.turn_angle}, angle diff: {self.turn_angle - self.current_angle}') #here
-                    if not self.scan_blocks and abs(self.current_angle - self.turn_angle) > 10: #ccw turn, + angle
+                    self.get_logger().info(f'target: {self.turn_angle}, current: {self.current_angle}, angle diff: {self.turn_angle - self.current_angle}') #here
+                    if not self.scan_blocks and abs(self.current_angle - self.turn_angle) >14: #ccw turn, + angle
                         
                         gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                         gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
@@ -188,10 +188,9 @@ class StateMachineNode(Node):
                         self.prev_error_turn = angle_err
                     elif not self.scan_blocks: #self.current_angle matched self.turn_angle, still no scan
                         self.scan_blocks = True
-                        self.turn_angle += 90
+                        self.turn_angle += 40
                 else: #scan is complete
                     pass
-                    # pass
                     # deltaL = 0
                     # deltaR = 0
                     # #process list
@@ -203,7 +202,7 @@ class StateMachineNode(Node):
                     #     self.get_logger().info(f'These are our objects: {self.detected_objects}')
                     #     self.detected_objects = []
                     #     self.scan_270_active = False
-                    #     #self.target_align = True
+                    #     # self.target_align = True
                     #     self.prev_error_turn = 0
                     # elif len(self.detected_objects) == 0: #and self.stack_counter < 5:
                     #     #TODO: if no cubes found while there are still cubes to be found --> scan again
@@ -211,16 +210,18 @@ class StateMachineNode(Node):
                     #     self.scan_blocks = False
                     #     self.get_logger().info('found no objects')
                     # else:
-                    #     self.activate_dumptruck()
+                    #     self.get_logger().info('going to dump')
+                    #     # self.activate_dumptruck()
 
             if self.target_align:
-                #if abs(self.target['angle'] - self.current_angle) > 5:
-                if abs(self.turn_angle - self.current_angle) > 10:
+                self.get_logger().info(f'aligning....target angle: {self.target['angle']}, current angle: {self.current_angle}')
+                if abs(self.target['angle'] - self.current_angle) > 10:
+                # if abs(self.turn_angle - self.current_angle) > 10:
                     #*** turn to face self.target["angle"] here: 
                     gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                     gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
 
-                    angle_err = (self.target['angle'] - self.current_angle + 180) % 360 - 180
+                    angle_error = (self.target['angle'] - self.current_angle + 180) % 360 - 180
 
                     #self.error_deriv = (angle_error - self.prev_error_turn)/self.dT
                     deltaL, deltaR = self.PID(angle_error, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
@@ -237,16 +238,16 @@ class StateMachineNode(Node):
 
             # PID alignment, while still or driving; cube to align to should depend on recorded angle
             if self.target_drive:
-                # self.get_logger().info(f'block_screen_ratio: {self.block_screen_ratio}')
+                self.get_logger().info(f'block_screen_ratio: {self.block_screen_ratio}')
                 
-                #if (self.block_screen_ratio < 0.8):
-                if (self.timer < 5):
+                if (self.block_screen_ratio < 0.8):
+                # if (self.timer < 2):
                     self.timer += self.dT
                     gainsL = (self.p_gainL_drive, self.i_gainL_drive, self.d_gainL_drive)
                     gainsR = (self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive)
 
-                    # angle_err = self.target['angle'] - self.current_angle
-                    angle_error = self.turn_angle - self.current_angle
+                    angle_error = self.target['angle'] - self.current_angle
+                    # angle_error = self.turn_angle - self.current_angle
                     # angle_error = 10
                     if angle_error > 180:
                         angle_error -= 360
@@ -262,7 +263,7 @@ class StateMachineNode(Node):
                     self.get_logger().info(f'self.target_drive stopped')
                     norm_speed = 0
                     self.target_drive = False
-                    # self.block_intake = True
+                    self.block_intake = True
                     self.prev_error_drive = 0
                     self.scan_blocks = False
 
@@ -288,9 +289,7 @@ class StateMachineNode(Node):
                     # if self.crook == True:
                     #     self.first_sphere_grabbed = True
 
-                    
-
-
+                
                 else:
                     # self.get_logger().info("done with frist sphere, grabbing stack")
                 
@@ -301,7 +300,7 @@ class StateMachineNode(Node):
                     # deltaL = deltaR = 0 #go forwards a little here (ex. 1 sec) to have it move forward enough so that red block would be flush against flap and would knock stack over
                     
                     if self.moved:
-                        if queue[1]["type"] == 'green': # or self.first_sphere_grabbed == False: ...do sphere flag separately
+                        if queue[1] is not None and queue[1]["type"] == 'green': 
                             #sequence here for red then green
                             if self.intake_timer_count < 200:
                                 self.intake_timer_count +=1
@@ -318,7 +317,7 @@ class StateMachineNode(Node):
                             
                                 
 
-                        elif queue[1]["type"] == 'red':
+                        elif queue[1] is not None and queue[1]["type"] == 'red':
                             self.get_logger().info(f"in stack queue: {queue[0]["type"]} {queue[1]["type"]}")
                             #seqeunce here for green then red
                             # self.elevator = True
@@ -357,12 +356,12 @@ class StateMachineNode(Node):
                             self.block_intake = False
                             # self.scan_270_active = True
                     else:
-                        if self.intake_timer_count < 1000:
-                            # self.get_logger().info('moving')
+                        if self.intake_timer_count < 75:
+                            self.get_logger().info('moving')
                             self.intake_timer_count +=1
                             norm_speed = 50
                         else:  
-                            # self.get_logger().info('done moving')
+                            self.get_logger().info('done moving')
                             norm_speed = 0
                             self.intake_timer_count += 1
                             self.moved = True
@@ -370,9 +369,9 @@ class StateMachineNode(Node):
                     
             #default: if too close to wall, this state pops up, overrides any state controls
             #TODO some maneuvering mechanism to get aligned with the wall
-            if self.wall_height_screen_ratio > 0.4:
-                norm_speed = -self.NORM_SPEED
-                deltaL, deltaR = 0,0
+            # if self.wall_height_screen_ratio > 0.4:
+            #     norm_speed = -self.NORM_SPEED
+            #     deltaL, deltaR = 0,0
 
 
         else:
@@ -392,10 +391,9 @@ class StateMachineNode(Node):
         #self.get_logger().info(f"lW: {-norm_speed + deltaL}, rW: {-norm_speed + deltaR}")
 
         #set motor speeds
-        #self.get_logger().info(f'{norm_speed, deltaL, deltaR}')
+        # self.get_logger().info(f'speeds: {norm_speed, deltaL, deltaR}')
         dc.left_speed = int(norm_speed + deltaL)
         dc.right_speed = int(norm_speed + deltaR)
-        self.get_logger().info(f'RS: {dc.right_speed}   LS: {dc.left_speed}')
         dc.dt_speed = self.dt_speed
         servo.angle1_duck = self.angle1_duck
         servo.angle2_claw = self.angle2_claw
