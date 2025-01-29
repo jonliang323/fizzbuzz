@@ -66,13 +66,14 @@ class StateMachineNode(Node):
         self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive = 0.5,0.01,0.1
 
         self.target = None
-        self.target_x_left = None
         self.obj_types = None
         self.sizes = None
         self.x_centers = None
         self.y_centers = None
         self.x_lefts = None
         self.y_tops = None
+        self.X_ALIGN = 550
+        self.Y_ALIGN = 50
 
         self.block_screen_ratio = 0
         self.wall_height_screen_ratio = 0
@@ -266,13 +267,14 @@ class StateMachineNode(Node):
             if self.target_drive:
                 type = self.current_stack[0]['type']
                 b_index = self.find_closest_index(self.sizes,types=self.obj_types, filter_type=type)
-                if (self.y_tops[b_index] > self.Y_ALIGN): #drive condition
+                target_y_top, target_x_left = self.y_tops[b_index], self.x_lefts[b_index]
+                if (target_y_top > self.Y_ALIGN): #drive condition
                 # if (self.timer < 2):
                     #self.timer += self.dT
                     gainsL = (self.p_gainL_drive, self.i_gainL_drive, self.d_gainL_drive)
                     gainsR = (self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive)
 
-                    pixel_error = self.X_ALIGN - self.target_x_left
+                    pixel_error = self.X_ALIGN - target_x_left
                     deltaL, deltaR = self.PID(angle_error, self.prev_error_drive, self.error_integralL_drive, self.error_integralR_drive, gainsL, gainsR)
                     # deltaL = deltaR = 0
                     norm_speed = self.NORM_SPEED
