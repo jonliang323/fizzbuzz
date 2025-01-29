@@ -284,18 +284,17 @@ class StateMachineNode(Node):
 
                 if self.first_sphere_grabbed == False: 
                     self.get_logger().info("grabbing first sphere")
-                    # self.crook = True
-                    # deltaL = deltaR = 30
                     
-                    # self.activate_crook()
-                    # self.duck = True
-                    # self.elevator = True
-                    self.activate_dumptruck()
-                    #move forward a little bit
-                    # self.elevator = True
-                    # self.first_sphere_grabbed = True
+                    norm_speed, deltaL, deltaR, self.dt_speed = self.activate_dumptruck()
+                
                     if self.dumptruck == True:
                         self.block_intake = False
+                    
+                    #norm_speed, dt_speed = self.activate_crook()
+                    # if self.crook == True:
+                    #     self.first_sphere_grabbed = True
+
+                    
 
 
                 else:
@@ -466,16 +465,16 @@ class StateMachineNode(Node):
         self.current_angle = self.modulate_angle(self.current_angle + round((dtheta*180/math.pi),2)) #CAN BE IN ABOVE IF STATEMENT
 
     def find_orange_wall(self):
-        motor_msg = MotorCommand()
         wall_info_msg = WallInfo()
-        dc = motor_msg.drive_motors
         if self.orange_tape_ratio > 0.75 and wall_info_msg.height_range < 10:
-            dc.left_speed = 0
-            dc.right_speed = 0
+            deltaL= 0
+            deltaR = 0
             self.orange_wall_found = True
         else:
-            dc.left_speed = 30
-            dc.right_speed = -30
+            deltaL = 30
+            deltaR= -30
+
+        return deltaL, deltaR
         
 
 
@@ -615,76 +614,89 @@ class StateMachineNode(Node):
             
     
     def activate_dumptruck(self):
-        motor_msg = MotorCommand()
         self.get_logger().info("activate dumptruck")
         if self.dumptruck == False:
             #some way to drive to orange wall
             if self.dumptruck_state == 'turning':
                 if self.orange_wall_found == False:
-                    self.find_orange_wall()
+                    deltaL, deltaR = self.find_orange_wall()
+                    norm_speed = 0
+                    dt_speed = 0
         
                 else:
+                    norm_speed = 0
+                    deltaL = deltaR = 0
+                    dt_speed = 0
                     self.dumptruck_state = 'driving'
                     self.dumptruck_timer_count = 0
 
             if self.dumptruck_state == 'driving':
+                dt_speed = 0
                 if self.wall_height_screen_ratio < 0.7: #0.7 is placeholder
-                    motor_msg.drive_motors.left_speed = 30
-                    motor_msg.drive_motors.right_speed = 30
+                    norm_speed = 30
+                    deltaL = deltaR = 0
+
                 else:
                     if self.dumptruck_timer_count < 50: #0.5 second:
-                        motor_msg.drive_motors.left_speed = -30
-                        motor_msg.drive_motors.right_speed = 30
+                        norm_speed = 0
+                        deltaL = -30
+                        deltaR = 30
+                        dt_speed = 0
                         self.dumptruck_timer_count += 1
                     else:
-                        motor_msg.drive_motors.left_speed = 0
-                        motor_msg.drive_motors.right_speed = 0
+                        norm_speed = 0
+                        deltaL = deltaR = 0
+                        dt_speed = 0
                         self.dumptruck_state = 'dumping'
                         self.dumptruck_timer_count = 0
 
 
             if self.dumptruck_state == 'dumping':
                 self.get_logger().info("enter dump state")
+                norm_speed = 0
+                deltaL = deltaR = 0
                 if self.dumptruck_timer_count < 200: #2 second
                     self.get_logger().info("in first stage")
-                    self.dt_speed = -80
+                    dt_speed = -80
                     self.dumptruck_timer_count += 1
                 if self.dumptruck_timer_count >= 200 and self.dumptruck_timer_count < 300: #1 second
                     self.get_logger().info("in second stage")
-                    self.dt_speed = 0
+                    dt_speed = 0
                     self.dumptruck_timer_count += 1
                 if self.dumptruck_timer_count >= 300 and self.dumptruck_timer_count < 500: #2 second
                     self.get_logger().info("in third stage")
-                    self.dt_speed = 80
+                    dt_speed = 80
                     self.dumptruck_timer_count += 1
                 if self.dumptruck_timer_count >= 500: 
                     self.get_logger().info("in fourth stage")
-                    self.dt_speed = 0
+                    dt_speed = 0
                     self.dumptruck = True
 
-        return motor_msg
+        return norm_speed, deltaL, deltaR, dt_speed
 
 
 
     def activate_crook(self):
         motor_msg = MotorCommand()
         dc = motor_msg.drive_motors
-        if self.crook == True:
+        if self.crook == False:
             self.get_logger().info("activating crook")
             if self.crook_timer_count < 200:
-                dc.dt_speed = -10
+                dt_speed = -50
+                norm_speed = 0
                 self.elevator_timer_count += 1
             if self.crook_timer_count >= 200 and self.crook_timer_count < 250: #1 second
-                dc.dt_speed = 0
-                dc.left_speed = -10
-                dc.right_speed = -10
+                dt_speed = 0
+                norm_speed = -10
                 self.elevator_timer_count += 1
             if self.crook_timer_count >= 250: #.5 sec
-                dc.left_speed = 0
-                dc.right_speed = 0
+                norm_speed=0
+                dt_speed = 0
                 self.activate_elevator() #will move forward in function
                 self.first_sphere_grabbed = True
-                self.crook = False
+                self.crook = True
+
+        return norm_speed, dt_speed
 
 
 
