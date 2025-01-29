@@ -55,8 +55,9 @@ class RavenNode(Node):
         # print(f"Right Motor - Speed: {right_speed}, Reverse: {right_rev}")
 
         # Speed controlled:
-        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, right_speed, reverse=right_rev)
-        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, left_speed, reverse=left_rev)
+        #commented out to preserve connection
+        # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, right_speed, reverse=right_rev)
+        # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, left_speed, reverse=left_rev)
         self.get_logger().info(f'{right_speed, left_speed}')
         # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH3, dt_speed, reverse=dt_rev)
 

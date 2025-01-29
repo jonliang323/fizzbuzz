@@ -172,6 +172,7 @@ class StateMachineNode(Node):
                 if self.turn_angle <= 270:
                     #turns 270 degrees
                     #scan_blocks is initially true
+                    #self.get_logger().info(f'angle: {self.current_angle - self.turn_angle}')
                     if not self.scan_blocks and abs(self.current_angle - self.turn_angle) > 5: #ccw turn, + angle
                         gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                         gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
@@ -386,6 +387,7 @@ class StateMachineNode(Node):
         #self.get_logger().info(f"lW: {-norm_speed + deltaL}, rW: {-norm_speed + deltaR}")
 
         #set motor speeds
+        #self.get_logger().info(f'{norm_speed, deltaL, deltaR}')
         dc.left_speed = int(norm_speed + deltaL)
         dc.right_speed = int(norm_speed + deltaR)
         servo.angle1_duck = self.angle1_duck
@@ -407,7 +409,7 @@ class StateMachineNode(Node):
         #find closest distance index (largest size)
         max_s_i = 0
         for i in range(1, len(sizes)):
-            if sizes[i] > sizes[min]:  
+            if sizes[i] > sizes[max_s_i]:  
                 max_s_i = i
         return max_s_i
     

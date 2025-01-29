@@ -30,7 +30,10 @@ class CubeDetectNode(Node):
         self.frame = msg
 
     def cv_callback(self, scan_blocks: Bool):
-        #gets last published frame from memory
+        #gets last published frame from memory if not default
+        if not self.frame:
+            self.get_logger().info('Waiting on frame to be published by camera')
+            return
         cur_frame = self.bridge.compressed_imgmsg_to_cv2(self.frame, "bgr8")
         #preprocess to get rid of pixels above blue tape
         hsv = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2HSV)
@@ -77,9 +80,8 @@ class CubeDetectNode(Node):
             otr = len(orange_locs)/len(all_locs)
 
         wall_info_msg = WallInfo()
-        wall_info_msg.orange_tape_ratio = otr
-        self.get_logger().info(f'this is the value: {avg_boundary_pixel}')
-        wall_info_msg.avg_height = avg_boundary_pixel
+        wall_info_msg.orange_tape_ratio = float(otr)
+        wall_info_msg.avg_height = int(avg_boundary_pixel)
         self.wall_info_pub.publish(wall_info_msg)
 
         if scan_blocks: #if we want to look for blocks too
@@ -98,13 +100,13 @@ class CubeDetectNode(Node):
             #print(f'results detected -------------------- :\n{boxes}')
             for i in range(len(boxes)):
                 obj_type = int(boxes.cls[i])
-                coords = boxes.xyxy[i]
-                x1,x2 = coords[0],coords[2]
-                y1,y2 = coords[1],coords[3]
+                coords = boxes.xyxy[i].round()
+                x1,x2 = int(coords[0]), int(coords[2])
+                y1,y2 = int(coords[1]), int(coords[3])
                 self.get_logger().info(f'xs {x1, x2}, ys {y1, y2}')
                 w = x2-x1
                 h = y2-y1
-                size = int(w*h)
+                size = w*h
                 new_box_overlap = 0
                 for entry in covered: #finds overlap between this box and all others
                     #overlap += self.find_box_overlap(entry,(x1,x2,y1,y2))
@@ -122,8 +124,8 @@ class CubeDetectNode(Node):
 
                 obj_type_list.append(obj_type)
                 size_list.append(size)
-                x_center_list.append((x1+x2)/2)
-                y_center_list.append((y1+y2)/2)
+                x_center_list.append((x1+x2)//2)
+                y_center_list.append((y1+y2)//2)
 
             self.get_logger().info(f'{obj_type_list}\n{size_list}\n{x_center_list}\n{y_center_list}\n{block_pixels}')
             cube_info_msg = CubeTracking()
