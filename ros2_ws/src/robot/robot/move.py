@@ -12,6 +12,8 @@
 # ros2 topic pub /path interfaces/msg/Path "{left: 1, right: -1, distance: 500}" --once
 # ros2 launch robot camera_launch.py
 # ros2 topic pub /path interfaces/msg/Path"{left: 1.0, right: 1.0, distance: 5000}" --once
+#
+
 import math
 import time
 
@@ -30,11 +32,11 @@ WHEEL_D = 78.0
 BASE_D = 241.0
 BASE_RATIO = WHEEL_D / BASE_D
 
-MAX_VEL = 2 * TICK_ROT
+MAX_VEL = 1.5 * TICK_ROT
 ACCEL = 1 * TICK_ROT
 
 TURN_CONST = BASE_RATIO * 2 * math.pi / TICK_ROT
-ANGLE_PROP = 800
+ANGLE_PROP = 600
 
 LEFT_MOTOR = Raven.MotorChannel.CH4
 RIGHT_MOTOR = Raven.MotorChannel.CH1
@@ -61,19 +63,22 @@ class MoveNode(Node):
         self.angle_updated = False
         self.raven = Raven()
         # setup motor
-        for motor in [LEFT_MOTOR, RIGHT_MOTOR]:
-            self.raven.set_motor_encoder(motor, 0)
-            self.raven.set_motor_mode(motor, Raven.MotorMode.POSITION)
-            self.raven.set_motor_torque_factor(motor, 80)
-            self.raven.set_motor_pid(motor, p_gain=20, i_gain=3, d_gain=.1)
-            self.raven.set_motor_target(motor, 0)
+        self.raven.set_motor_encoder(LEFT_MOTOR, 0)
+        self.raven.set_motor_mode(LEFT_MOTOR, Raven.MotorMode.POSITION)
+        self.raven.set_motor_torque_factor(LEFT_MOTOR, 80)
+        self.raven.set_motor_pid(LEFT_MOTOR, p_gain=20, i_gain=3, d_gain=.1)
+        self.raven.set_motor_target(LEFT_MOTOR, 0)
+        
+        self.raven.set_motor_encoder(RIGHT_MOTOR, 0)
+        self.raven.set_motor_mode(RIGHT_MOTOR, Raven.MotorMode.POSITION)
+        self.raven.set_motor_torque_factor(RIGHT_MOTOR, 80)
+        self.raven.set_motor_pid(RIGHT_MOTOR, p_gain=-20, i_gain=-3, d_gain=-.1)
+        self.raven.set_motor_target(RIGHT_MOTOR, 0)
 
-        # dump truck pid position
-        self.raven.set_motor_encoder(BUCKET_MOTOR, 0)
-        self.raven.set_motor_mode(BUCKET_MOTOR, Raven.MotorMode.POSITION)
+        # dump dc motor
+        self.raven.set_motor_mode(BUCKET_MOTOR, Raven.MotorMode.DIRECT)
         self.raven.set_motor_torque_factor(BUCKET_MOTOR, 80)
-        self.raven.set_motor_pid(BUCKET_MOTOR, p_gain=20, i_gain=3, d_gain=.1)
-        self.raven.set_motor_target(BUCKET_MOTOR, 0)
+        self.raven.set_motor_speed_factor(BUCKET_MOTOR, 0)
 
         self.create_subscription(Float32, 'imu', self.imu_callback, 10)
         self.create_subscription(Float32, 'bucket', self.bucket_callback, 10)
@@ -90,16 +95,16 @@ class MoveNode(Node):
 
 
     def duck_callback(self, msg):
-        self.raven_board.set_servo_position(Raven.ServoChannel.CH1, msg.data, 500, 2500)
+        self.raven.set_servo_position(Raven.ServoChannel.CH1, msg.data, 500, 2500)
 
     def claw_callback(self, msg):
-        self.raven_board.set_servo_position(Raven.ServoChannel.CH2, msg.data, 500, 2500)
+        self.raven.set_servo_position(Raven.ServoChannel.CH2, msg.data, 500, 2500)
     
     def elevator_callback(self, msg):
-        self.raven_board.set_servo_position(Raven.ServoChannel.CH3, msg.data, 500, 2500)
+        self.raven.set_servo_position(Raven.ServoChannel.CH3, msg.data, 500, 2500)
     
     def flap_callback(self, msg):
-        self.raven_board.set_servo_position(Raven.ServoChannel.CH4, msg.data, 500, 2500)
+        self.raven.set_servo_position(Raven.ServoChannel.CH4, msg.data, 500, 2500)
 
     def imu_callback(self, msg):
         self.angle = msg.data
@@ -108,10 +113,10 @@ class MoveNode(Node):
             self.angle_updated = True
 
     def bucket_callback(self, msg):
-        self.raven.set_motor_target(BUCKET_MOTOR, msg.data)
+        self.raven.set_motor_speed_factor(BUCKET_MOTOR, msg.data)
 
     def path_callback(self, msg):
-        self.start_path(-msg.left, msg.right, msg.rotations)
+        self.start_path(-msg.left, msg.right, msg.rotations * TICK_ROT)
 
     def start_path(self, left_coef, right_coef, distance):
         self.total_dist = distance
@@ -139,12 +144,12 @@ class MoveNode(Node):
         self.current_dist += (self.last_speed + target_speed) / 2 * DT
         self.last_speed = target_speed
 
-        target_angle = (self.right_coef + self.left_coef)/2.0 * TURN_CONST * self.current_dist
+        target_angle = -(self.right_coef + self.left_coef)/2.0 * TURN_CONST * self.current_dist
 
         angle_error = (self.angle - self.start_angle) - target_angle
 
-        self.start_left -= angle_error * ANGLE_PROP * DT
-        self.start_right -= angle_error * ANGLE_PROP * DT
+        self.start_left += angle_error * ANGLE_PROP * DT
+        self.start_right += angle_error * ANGLE_PROP * DT
 
         self.raven.set_motor_target(LEFT_MOTOR, self.start_left + self.current_dist * self.left_coef)
         self.raven.set_motor_target(RIGHT_MOTOR, self.start_right + self.current_dist * self.right_coef)
