@@ -26,7 +26,7 @@ class CubeDetectNode(Node):
         self.frame = None
         self.model = YOLO("image_processing/image_processing/yolo_weights/best.pt")
         self.scanned_frames = 0
-        
+
     def image_callback(self, msg: CompressedImage):
         self.frame = msg
 
@@ -60,7 +60,7 @@ class CubeDetectNode(Node):
             orange_locs = []
         else:
             orange_locs = list(zip(orange_temp[0],orange_temp[1],['o']*len(orange_temp[0])))
-        
+
         all_locs = sorted(blue_locs + orange_locs, key=lambda x:(x[1],x[0])) #sort (row, col, color) locs by col, then row
         #find average pixel boundary height (for orange + blue combined)
         avg_boundary_pixel = 0
@@ -95,7 +95,7 @@ class CubeDetectNode(Node):
         wall_info_msg.avg_height = int(avg_boundary_pixel)
         wall_info_msg.height_range = int(orange_height_range)
         self.wall_info_pub.publish(wall_info_msg)
-        
+
         if scan_blocks.data: #if we want to look for blocks too
             ##
             # Now, feed into model for classification and bounding box
@@ -118,6 +118,14 @@ class CubeDetectNode(Node):
                 w = x2-x1
                 h = y2-y1
                 size = w*h
+
+                #check that bb is not a wall
+                box = hsv[y1:y2, x1:x2] #cropped frame
+                avg_saturation = np.mean(box, axis=(0,1))[1]
+
+                if avg_saturation < 25: #adjust threshold if needed
+                    continue
+
                 new_box_overlap = 0
                 for entry in covered: #finds overlap between this box and all others
                     #overlap += self.find_box_overlap(entry,(x1,x2,y1,y2))
@@ -141,7 +149,7 @@ class CubeDetectNode(Node):
                 else:
                     color = (255,0,0)
                 cv2.rectangle(cur_frame,(x1,y1),(x2,y2),color,2) #output bounding box
-                self.get_logger().info(f"{cv2.imwrite(f"./pics/{self.scanned_frames}.jpg", cur_frame)} picture {self.scanned_frames}")
+                self.get_logger().info(f'{cv2.imwrite(f"./pics/{self.scanned_frames}.jpg", cur_frame)} picture {self.scanned_frames}')
 
                 obj_type_list.append(obj_type)
                 size_list.append(size)
@@ -157,7 +165,7 @@ class CubeDetectNode(Node):
             self.cube_info_pub.publish(cube_info_msg)
 
             self.scanned_frames += 1
-    
+
 def main(args=None):
     rclpy.init()
     node = CubeDetectNode()
