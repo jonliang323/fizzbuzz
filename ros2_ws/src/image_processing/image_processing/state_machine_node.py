@@ -43,7 +43,6 @@ class StateMachineNode(Node):
         self.scan_270_active = False
         self.scan_blocks = False
         self.detected_objects = []
-        self.spin_speed = 50 #30 is placeholder
         self.stack_counter = 0
         self.error_deriv = 0
 
@@ -52,8 +51,8 @@ class StateMachineNode(Node):
         self.prev_error_turn = 0
         self.error_integralL_turn, self.error_integralR_turn= 0,0
         #gains should result in critical damping, best response
-        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 0.9,0.01,0.01
-        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 0.9,0.01,0.01
+        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 0.8,0.01,0.2
+        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 0.8,0.01,0.2
 
         #turn drive state, PID
         self.target_drive = False
@@ -124,8 +123,8 @@ class StateMachineNode(Node):
             #obj has descriptors: distance, angle, x_center, type
             if len(obj_types) > 0:
                 closest = self.find_closest_index(sizes)
-                rel_angle = int(math.atan((self.FOV_XY[0]/2 - x_centers[closest])/self.FOCAL_X)*180/math.pi)
-                closest_obj = {"size":sizes[closest], "angle":self.current_angle + rel_angle, "type":self.CLASSES[obj_types[closest]]}
+                rel_angle = math.atan((self.FOV_XY[0]/2 - x_centers[closest])/self.FOCAL_X)*180/math.pi
+                closest_obj = {"size":sizes[closest], "angle":int(self.current_angle + rel_angle), "type":self.CLASSES[obj_types[closest]]}
                 self.current_stack = self.find_stack(closest, closest_obj)
                 self.detected_objects.append(closest_obj)
                 self.get_logger().info(f'detected: {self.detected_objects}') #here
@@ -146,7 +145,7 @@ class StateMachineNode(Node):
     def delta_encoder_callback(self, msg: EncoderCounts):
         self.delta_encoderL = msg.encoder1
         self.delta_encoderR = msg.encoder2
-        self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}') #here
+        #self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}') #here
         #only update angle here, after encoder deltas have been sent, to be read once per cycle
         self.update_angle_and_pos()
         #self.get_logger().info(f'current_angle: {self.current_angle}')
@@ -177,8 +176,8 @@ class StateMachineNode(Node):
                 if self.turn_angle <= 270:
                     #turns 270 degrees
                     #scan_blocks is initially true
-                    self.get_logger().info(f'angle diff: {self.current_angle - self.turn_angle}') #here
-                    if not self.scan_blocks and abs(self.current_angle - self.turn_angle) > 5: #ccw turn, + angle
+                    #self.get_logger().info(f'angle diff: {self.current_angle - self.turn_angle}') #here
+                    if not self.scan_blocks and abs(self.current_angle - self.turn_angle) > 10: #ccw turn, + angle
                         gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                         gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
 

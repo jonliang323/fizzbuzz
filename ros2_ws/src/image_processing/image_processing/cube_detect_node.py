@@ -76,11 +76,11 @@ class CubeDetectNode(Node):
                         cur_frame[:max_masked_loc[0],col] = (255,255,255)
                     avg_boundary_pixel += max_masked_loc[0]
                     col += 1
-            avg_boundary_pixel = avg_boundary_pixel//col
+            avg_boundary_pixel = avg_boundary_pixel/col
             otr = len(orange_locs)/len(all_locs)
 
-        min_o_height = float('inf')
-        max_o_height = float('-inf')
+        min_o_height = 0
+        max_o_height = 999
         for loc in orange_locs:
             if loc[0] < min_o_height:
                 min_o_height = loc[0]
@@ -92,7 +92,7 @@ class CubeDetectNode(Node):
         wall_info_msg = WallInfo()
         wall_info_msg.orange_tape_ratio = float(otr)
         wall_info_msg.avg_height = int(avg_boundary_pixel)
-        wall_info_msg.height_range = orange_height_range
+        wall_info_msg.height_range = int(orange_height_range)
         self.wall_info_pub.publish(wall_info_msg)
 
         if scan_blocks: #if we want to look for blocks too
@@ -114,7 +114,6 @@ class CubeDetectNode(Node):
                 coords = boxes.xyxy[i].round()
                 x1,x2 = int(coords[0]), int(coords[2])
                 y1,y2 = int(coords[1]), int(coords[3])
-                self.get_logger().info(f'xs {x1, x2}, ys {y1, y2}')
                 w = x2-x1
                 h = y2-y1
                 size = w*h
@@ -138,7 +137,6 @@ class CubeDetectNode(Node):
                 x_center_list.append((x1+x2)//2)
                 y_center_list.append((y1+y2)//2)
 
-            self.get_logger().info(f'{obj_type_list}\n{size_list}\n{x_center_list}\n{y_center_list}\n{block_pixels}')
             cube_info_msg = CubeTracking()
             cube_info_msg.sizes = size_list
             cube_info_msg.obj_types = obj_type_list
