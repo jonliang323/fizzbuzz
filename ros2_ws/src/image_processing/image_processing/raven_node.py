@@ -12,14 +12,14 @@ class RavenNode(Node):
 
         # Set motors to DIRECT
         self.raven_board.set_motor_mode(Raven.MotorChannel.CH1, Raven.MotorMode.DIRECT)
-        self.raven_board.set_motor_mode(Raven.MotorChannel.CH2, Raven.MotorMode.DIRECT)
+        self.raven_board.set_motor_mode(Raven.MotorChannel.CH4, Raven.MotorMode.DIRECT)
         self.raven_board.set_motor_mode(Raven.MotorChannel.CH3, Raven.MotorMode.DIRECT)
         self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH1, 80) # Let the motor use 50% max torque to get to speed factor
-        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH2, 80)
+        self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH4, 80)
         self.raven_board.set_motor_torque_factor(Raven.MotorChannel.CH3, 80)
 
         self.raven_board.set_motor_encoder(Raven.MotorChannel.CH1, 0) # Set encoder count for motor 1 to zero
-        self.raven_board.set_motor_encoder(Raven.MotorChannel.CH2, 0) # Set encoder count for motor 1 to zero
+        self.raven_board.set_motor_encoder(Raven.MotorChannel.CH4, 0) # Set encoder count for motor 1 to zero
 
         self.motor_sub = self.create_subscription(MotorCommand, "motor_command", self.raven_callback, 10)
         self.encoder_timer = self.create_timer(self.dT, self.delta_encoder_callback)
@@ -56,8 +56,9 @@ class RavenNode(Node):
         # Speed controlled:
         #commented out to preserve connection
         self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, right_speed, reverse=right_rev)
-        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, left_speed, reverse=left_rev)
-        #self.get_logger().info(f'{right_speed, left_speed}')
+        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH4, left_speed, reverse=left_rev)
+
+        self.get_logger().info(f'{right_speed, left_speed}')
         
         self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH3, dt_speed, reverse=dt_rev)
 
@@ -87,7 +88,7 @@ class RavenNode(Node):
 def destroy_node(self):
     # Stop the motors before shutting down
     self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, 0, reverse=False)
-    self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, 0, reverse=False)
+    self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH4, 0, reverse=False)
     super().destroy_node()  # Call the parent class destroy_node
 
 def main(args=None):

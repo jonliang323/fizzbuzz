@@ -68,8 +68,8 @@ class StateMachineNode(Node):
         self.orange_wall_found = False
 
         #elevator variables
-        self.block_intake = False #True
-        self.first_sphere_grabbed = False
+        self.block_intake = True #True
+        self.first_sphere_grabbed = True
         self.red_counter = 0
         self.elevator_timer_count = 0
         self.duck_timer_count = 0
@@ -191,6 +191,7 @@ class StateMachineNode(Node):
                         self.turn_angle += 90
                 else: #scan is complete
                     pass
+                    # pass
                     # deltaL = 0
                     # deltaR = 0
                     # #process list
@@ -265,12 +266,13 @@ class StateMachineNode(Node):
                     self.prev_error_drive = 0
                     self.scan_blocks = False
 
-            #TODO: block intake, elevator, bird, dumptruck
+
 
             
             if self.block_intake:
-                # queue = self.current_stack
-                queue = [{"size": 0, "angle": 0, "type": "red"}, {"size": 0, "angle": 0, "type": "green"}]
+                queue = self.current_stack
+                # self.get_logger().info(f'queue: {queue}')
+                # queue = [{"size": 0, "angle": 0, "type": "red"}, {"size": 0, "angle": 0, "type": "green"}]
                 # if queue[1] is not None:
                 #     self.stack_counter += 1
 
@@ -321,7 +323,10 @@ class StateMachineNode(Node):
                             self.get_logger().info(f"in stack queue: {queue[0]["type"]} {queue[1]["type"]}")
                             #seqeunce here for green then red
                             # self.elevator = True
-                            if self.intake_timer_count < 1200:
+                            # if self.intake_timer_count < 200:
+                            #     norm_speed = 40
+                            if self.intake_timer_count >= 200 and self.intake_timer_count < 1200:
+                                norm_speed = 0
                                 self.activate_elevator()
                                 self.intake_timer_count +=1
 
@@ -353,10 +358,12 @@ class StateMachineNode(Node):
                             self.block_intake = False
                             # self.scan_270_active = True
                     else:
-                        if self.intake_timer_count < 200:
+                        if self.intake_timer_count < 1000:
+                            # self.get_logger().info('moving')
                             self.intake_timer_count +=1
-                            norm_speed = 30
-                        else:
+                            norm_speed = 50
+                        else:  
+                            # self.get_logger().info('done moving')
                             norm_speed = 0
                             self.intake_timer_count += 1
                             self.moved = True
@@ -389,6 +396,7 @@ class StateMachineNode(Node):
         #self.get_logger().info(f'{norm_speed, deltaL, deltaR}')
         dc.left_speed = int(norm_speed + deltaL)
         dc.right_speed = int(norm_speed + deltaR)
+        self.get_logger().info(f'RS: {dc.right_speed}   LS: {dc.left_speed}')
         dc.dt_speed = self.dt_speed
         servo.angle1_duck = self.angle1_duck
         servo.angle2_claw = self.angle2_claw
@@ -418,14 +426,14 @@ class StateMachineNode(Node):
         stack_partner_index = None
         for x in x_centers:
             diff = int(x - x_centers[index_of_closest])
-            if diff < 20: #difference of 20 pixels
+            if diff < 50 and x_centers.index(x) != index_of_closest: #difference of 20 pixels
                 stack_partner_index = x_centers.index(x)
                 rel_angle = int(math.atan((self.FOV_XY[0]/2 - x_centers[stack_partner_index])/self.FOCAL_X)*180/math.pi)
                 stack_partner = {"size":sizes[stack_partner_index], "angle":self.current_angle + rel_angle, "type":self.CLASSES[obj_types[stack_partner_index]]}
         if stack_partner_index == None:
             bottom = closest_obj
             top = None
-        elif y_centers[stack_partner_index] < y_centers[index_of_closest]:
+        elif int(y_centers[stack_partner_index]) > int(y_centers[index_of_closest]):
             bottom = stack_partner
             top = closest_obj
         else:
