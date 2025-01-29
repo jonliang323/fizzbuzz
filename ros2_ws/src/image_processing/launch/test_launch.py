@@ -21,10 +21,10 @@ def generate_launch_description():
         ],
     )
     
-    live_label_node = Node(
+    pic_node = Node(
         package='image_processing',
-        executable='live_label_subscriber',
+        executable='pic_subscriber',
         output='screen'
     )
 
-    return LaunchDescription([v4l2_camera_node, live_label_node])
+    return LaunchDescription([v4l2_camera_node, pic_node])

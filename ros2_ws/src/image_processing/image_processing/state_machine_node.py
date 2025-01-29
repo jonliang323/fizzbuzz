@@ -79,8 +79,8 @@ class StateMachineNode(Node):
         self.orange_wall_found = False
 
         #elevator variables
-        self.block_intake = False #True
-        self.first_sphere_grabbed = True
+        self.block_intake = True #True
+        self.first_sphere_grabbed = False
         self.red_counter = 0
         self.elevator_timer_count = 0
         self.duck_timer_count = 0
@@ -288,9 +288,10 @@ class StateMachineNode(Node):
                 #     self.stack_counter += 1
 
                 if self.first_sphere_grabbed == False: 
-                    self.get_logger().info("grabbing first sphere")
+                    # self.get_logger().info("grabbing first sphere")
                     
                     norm_speed, deltaL, deltaR, self.dt_speed = self.activate_dumptruck()
+                    # self.get_logger().info(f"grabbing first sphere {self.dt_speed}")
                 
                     if self.dumptruck == True:
                         self.block_intake = False
@@ -661,12 +662,13 @@ class StateMachineNode(Node):
 
 
             if self.dumptruck_state == 'dumping':
-                self.get_logger().info("enter dump state")
+                # self.get_logger().info("enter dump state")
                 norm_speed = 0
                 deltaL = deltaR = 0
                 if self.dumptruck_timer_count < 200: #2 second
                     self.get_logger().info("in first stage")
-                    dt_speed = -80
+                    # dt_speed = -50
+                    norm_speed = 50
                     self.dumptruck_timer_count += 1
                 if self.dumptruck_timer_count >= 200 and self.dumptruck_timer_count < 300: #1 second
                     self.get_logger().info("in second stage")
@@ -674,7 +676,7 @@ class StateMachineNode(Node):
                     self.dumptruck_timer_count += 1
                 if self.dumptruck_timer_count >= 300 and self.dumptruck_timer_count < 500: #2 second
                     self.get_logger().info("in third stage")
-                    dt_speed = 80
+                    dt_speed = 50
                     self.dumptruck_timer_count += 1
                 if self.dumptruck_timer_count >= 500: 
                     self.get_logger().info("in fourth stage")
