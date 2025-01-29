@@ -40,6 +40,7 @@ class StateMachineNode(Node):
 
         # 360 scan variables
         self.scan_270_active = False
+        self.scan_timer = 0
         #each of the following three depends on the one above it to be true
         self.wall_scan = False
         self.yolo_scan = False
@@ -202,9 +203,15 @@ class StateMachineNode(Node):
                         deltaL, deltaR = self.PID(angle_err, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
                         self.prev_error_turn = angle_err
                     elif not self.yolo_scan: #just finished turning, next yolo scan
+                        deltaL = deltaR = 0
                         self.yolo_scan = True
                         self.save_scan = True
                         self.turn_angle += 40
+                        self.scan_timer +=1
+
+                        if self.scan_timer >= 75: #.75 seconds
+                            self.turn_angle += 40
+                            self.scan_timer = 0
                 else: #scan is complete
                     #pass
                     deltaL = 0
