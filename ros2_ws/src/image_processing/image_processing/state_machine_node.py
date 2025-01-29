@@ -43,7 +43,6 @@ class StateMachineNode(Node):
         self.scan_270_active = False
         self.scan_blocks = False
         self.detected_objects = []
-        self.spin_speed = 50 #30 is placeholder
         self.stack_counter = 0
         self.error_deriv = 0
 
@@ -52,8 +51,8 @@ class StateMachineNode(Node):
         self.prev_error_turn = 0
         self.error_integralL_turn, self.error_integralR_turn= 0,0
         #gains should result in critical damping, best response
-        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 0.9,0.01,0.01
-        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 0.9,0.01,0.01
+        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 1.2,0.01,0.1
+        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 1.2,0.01,0.1
 
         #turn drive state, PID
         self.target_drive = False
@@ -117,6 +116,7 @@ class StateMachineNode(Node):
         obj_types = msg.obj_types
         sizes = msg.sizes
         x_centers = msg.x_centers
+        y_centers = msg.y_centers
         block_pixels = msg.block_pixels
 
         #two cases when we want to scan the blocks (run YOLO classification)
@@ -124,11 +124,11 @@ class StateMachineNode(Node):
             #obj has descriptors: distance, angle, x_center, type
             if len(obj_types) > 0:
                 closest = self.find_closest_index(sizes)
-                rel_angle = int(math.atan((self.FOV_XY[0]/2 - x_centers[closest])/self.FOCAL_X)*180/math.pi)
-                closest_obj = {"size":sizes[closest], "angle":self.current_angle + rel_angle, "type":self.CLASSES[obj_types[closest]]}
-                self.current_stack = self.find_stack(closest, closest_obj)
+                rel_angle = math.atan((self.FOV_XY[0]/2 - x_centers[closest])/self.FOCAL_X)*180/math.pi
+                closest_obj = {"size":sizes[closest], "angle":int(self.current_angle + rel_angle), "type":self.CLASSES[obj_types[closest]]}
+                self.current_stack = self.find_stack(closest, closest_obj, x_centers, y_centers, sizes, obj_types)
                 self.detected_objects.append(closest_obj)
-                self.get_logger().info(f'detected: {self.detected_objects}') #here
+                self.get_logger().info(f'detected stack: {self.current_stack}') #here
             #otherwise, detected objects is not changed
         elif self.target_drive:
             #find block screen ratio
@@ -144,9 +144,9 @@ class StateMachineNode(Node):
         self.height_range = msg.height_range
 
     def delta_encoder_callback(self, msg: EncoderCounts):
-        self.delta_encoderL = msg.encoder1
-        self.delta_encoderR = msg.encoder2
-        self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}') #here
+        self.delta_encoderR = msg.encoder1
+        self.delta_encoderL = msg.encoder2
+        #self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}') #here
         #only update angle here, after encoder deltas have been sent, to be read once per cycle
         self.update_angle_and_pos()
         #self.get_logger().info(f'current_angle: {self.current_angle}')
@@ -174,46 +174,43 @@ class StateMachineNode(Node):
 
             if self.scan_270_active:
                 #spins full 270
-                if self.turn_angle <= 270:
+                if self.turn_angle <= 0:
                     #turns 270 degrees
                     #scan_blocks is initially true
-                    self.get_logger().info(f'angle diff: {self.current_angle - self.turn_angle}') #here
-                    if not self.scan_blocks and abs(self.current_angle - self.turn_angle) > 5: #ccw turn, + angle
+                    self.get_logger().info(f'target: {self.turn_angle}, angle diff: {self.turn_angle - self.current_angle}') #here
+                    if not self.scan_blocks and abs(self.current_angle - self.turn_angle) > 10: #ccw turn, + angle
+                        
                         gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                         gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
 
                         angle_err = self.turn_angle - self.current_angle
-                        if angle_err > 180:
-                            angle_err -= 360
-                        elif angle_err < -180:
-                            angle_err += 360
                         deltaL, deltaR = self.PID(angle_err, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
                         self.prev_error_turn = angle_err
                     elif not self.scan_blocks: #self.current_angle matched self.turn_angle, still no scan
                         self.scan_blocks = True
                         self.turn_angle += 90
                 else: #scan is complete
-                    deltaL = 0
-                    deltaR = 0
-                    #process list
-                    if len(self.detected_objects) > 0:
-                        closest = self.find_closest_index([obj["size"] for obj in self.detected_objects])
-                        self.target = self.detected_objects[closest]
-                        self.get_logger().info(f'\n\n scan complete, closest object is {self.target["type"]},\nat an angle of {self.target["angle"]}')
-                        self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
-                        self.detected_objects = []
-                        self.scan_270_active = False
-                        #self.target_align = True
-                        self.prev_error_turn = 0
-                    elif len(self.detected_objects) == 0: #and self.stack_counter < 5:
-                        #TODO: if no cubes found while there are still cubes to be found --> scan again
-                        self.turn_angle = 0
-                        self.scan_blocks = False
-                        self.get_logger().info('found no objects')
-                    else:
-                        self.activate_dumptruck()
-
-                    self.get_logger().info(f'These are our objects: {self.detected_objects}')
+                    pass
+                    # deltaL = 0
+                    # deltaR = 0
+                    # #process list
+                    # if len(self.detected_objects) > 0:
+                    #     closest = self.find_closest_index([obj["size"] for obj in self.detected_objects])
+                    #     self.target = self.detected_objects[closest]
+                    #     self.get_logger().info(f'\n\n scan complete, closest object is {self.target["type"]},\nat an angle of {self.target["angle"]}')
+                    #     self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
+                    #     self.get_logger().info(f'These are our objects: {self.detected_objects}')
+                    #     self.detected_objects = []
+                    #     self.scan_270_active = False
+                    #     #self.target_align = True
+                    #     self.prev_error_turn = 0
+                    # elif len(self.detected_objects) == 0: #and self.stack_counter < 5:
+                    #     #TODO: if no cubes found while there are still cubes to be found --> scan again
+                    #     self.turn_angle = 0
+                    #     self.scan_blocks = False
+                    #     self.get_logger().info('found no objects')
+                    # else:
+                    #     self.activate_dumptruck()
 
             if self.target_align:
                 #if abs(self.target['angle'] - self.current_angle) > 5:
@@ -222,12 +219,7 @@ class StateMachineNode(Node):
                     gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                     gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
 
-                    # angle_error = self.target['angle'] - self.current_angle
-                    angle_error = self.turn_angle - self.current_angle
-                    if angle_error > 180:
-                        angle_error -= 360
-                    elif angle_error < -180:
-                        angle_error += 360
+                    angle_err = (self.target['angle'] - self.current_angle + 180) % 360 - 180
 
                     #self.error_deriv = (angle_error - self.prev_error_turn)/self.dT
                     deltaL, deltaR = self.PID(angle_error, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
@@ -420,20 +412,19 @@ class StateMachineNode(Node):
                 max_s_i = i
         return max_s_i
     
-    def find_stack(self, index_of_closest, closest_obj):
+    def find_stack(self, index_of_closest, closest_obj, x_centers, y_centers, sizes, obj_types):
         #find stack of blocks
-        msg = CubeTracking()
         stack_partner_index = None
-        for x in msg.x_centers:
-            diff = x - msg.x_centers[index_of_closest]
+        for x in x_centers:
+            diff = int(x - x_centers[index_of_closest])
             if diff < 20: #difference of 20 pixels
-                stack_partner_index = msg.x_centers.index(x)
-                rel_angle = int(math.atan((self.FOV_XY[0]/2 - msg.x_centers[stack_partner_index])/self.FOCAL_X)*180/math.pi)
-                stack_partner = {"size":msg.sizes[stack_partner_index], "angle":self.current_angle + rel_angle, "type":self.CLASSES[msg.obj_types[stack_partner_index]]}
+                stack_partner_index = x_centers.index(x)
+                rel_angle = int(math.atan((self.FOV_XY[0]/2 - x_centers[stack_partner_index])/self.FOCAL_X)*180/math.pi)
+                stack_partner = {"size":sizes[stack_partner_index], "angle":self.current_angle + rel_angle, "type":self.CLASSES[obj_types[stack_partner_index]]}
         if stack_partner_index == None:
             bottom = closest_obj
             top = None
-        elif msg.y_centers[stack_partner_index] < msg.y_centers[index_of_closest]:
+        elif y_centers[stack_partner_index] < y_centers[index_of_closest]:
             bottom = stack_partner
             top = closest_obj
         else:

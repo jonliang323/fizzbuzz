@@ -28,7 +28,6 @@ class RavenNode(Node):
     def raven_callback(self, msg: MotorCommand):
         dc = msg.drive_motors
         servo = msg.actuate_motors
-        rev = False
         #flipped negative logic to account for rotation of motors in given polarity
         if dc.left_speed < 0:
             left_speed = abs(dc.left_speed)
@@ -56,9 +55,9 @@ class RavenNode(Node):
 
         # Speed controlled:
         #commented out to preserve connection
-        # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, right_speed, reverse=right_rev)
-        # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, left_speed, reverse=left_rev)
-        # self.get_logger().info(f'{right_speed, left_speed}')
+        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, right_speed, reverse=right_rev)
+        self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH2, left_speed, reverse=left_rev)
+        #self.get_logger().info(f'{right_speed, left_speed}')
         
         self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH3, dt_speed, reverse=dt_rev)
 
