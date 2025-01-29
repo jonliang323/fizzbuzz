@@ -121,6 +121,13 @@ class CubeDetectNode(Node):
                     w = x2-x1
                     h = y2-y1
                     size = w*h
+
+                    box = hsv[y1:y2, x1:x2]
+                    avg_saturation = np.mean(box, axis=(0,1))[1]
+
+                    if avg_saturation <= 25:
+                        continue
+
                     #to calculate block pixels
                     # new_box_overlap = 0
                     # for entry in covered: #finds overlap between this box and all others
