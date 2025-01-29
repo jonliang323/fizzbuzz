@@ -39,7 +39,7 @@ class StateMachineNode(Node):
         self.camera_startup = True
 
         # 360 scan variables
-        self.scan_270_active = False
+        self.scan_270_active = True
         self.scan_timer = 0
         #each of the following three depends on the one above it to be true
         self.wall_scan = False
@@ -54,8 +54,8 @@ class StateMachineNode(Node):
         self.prev_error_turn = 0
         self.error_integralL_turn, self.error_integralR_turn= 0,0
         #gains should result in critical damping, best response
-        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 1.5,0.01,0.1
-        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 1.5,0.01,0.1
+        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 1.8,0.01,0.1
+        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 1.8,0.01,0.1
 
         #turn drive state, PID
         self.target_drive = False
@@ -80,7 +80,7 @@ class StateMachineNode(Node):
         self.orange_wall_found = False
 
         #elevator variables
-        self.block_intake = True #True
+        self.block_intake = False #True
         self.first_sphere_grabbed = False
         self.red_counter = 0
         self.elevator_timer_count = 0
@@ -227,7 +227,7 @@ class StateMachineNode(Node):
                         self.get_logger().info(f'These are our objects: {self.detected_objects}')
                         self.detected_objects = []
                         self.scan_270_active = False
-                        # self.target_align = True
+                        self.target_align = True
                         self.yolo_scan = False
                         self.save_scan = False
                         self.prev_error_turn = 0
@@ -284,7 +284,7 @@ class StateMachineNode(Node):
                     deltaL, deltaR = 0
                     self.yolo_scan = False
                     self.target_drive = False
-                    self.block_intake = True
+                    # self.block_intake = True
                     self.prev_error_drive = 0
 
             if self.block_intake:
