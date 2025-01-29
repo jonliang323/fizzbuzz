@@ -25,7 +25,7 @@ class CubeDetectNode(Node):
 
         self.frame = None
         self.model = YOLO("image_processing/image_processing/yolo_weights/best.pt")
-        self.scanned_frames = 0
+        self.saved_frames = 0
 
     def image_callback(self, msg: CompressedImage):
         self.frame = msg
@@ -53,8 +53,8 @@ class CubeDetectNode(Node):
             #Orange processing
             orange_mask = cv2.inRange( #output b and w mask, w pixels are orange
                 hsv,
-                np.array([int(190/2),int(0.5*255),int(0.1*255)]), #min hsv orange
-                np.array([int(240/2),int(8*255),int(0.5*255)]), #max hsv orange
+                np.array([int(20/2),int(0.82*255),int(0.35*255)]), #min hsv orange
+                np.array([int(29/2),int(1*255),int(0.59*255)]), #max hsv orange
             )
             orange_temp = np.where(orange_mask == 255) #tuple of row col lists
             if orange_temp == []:
@@ -146,8 +146,6 @@ class CubeDetectNode(Node):
                         else:
                             color = (255,0,0)
                         cv2.rectangle(cur_frame,(x1,y1),(x2,y2),color,2) #output bounding box
-                        self.get_logger().info(f"{cv2.imwrite(f"./pics/{self.scanned_frames}.jpg", cur_frame)} picture {self.scanned_frames}")
-                        self.scanned_frames += 1
 
                     obj_type_list.append(obj_type)
                     size_list.append(size)
@@ -155,6 +153,10 @@ class CubeDetectNode(Node):
                     y_center_list.append((y1+y2)//2)
                     x_left_list.append(x1)
                     y_top_list.append(y1)
+
+                if scan_msg.save.data:
+                    self.get_logger().info(f"{cv2.imwrite(f"./pics/{self.saved_frames}.jpg", cur_frame)} picture {self.saved_frames}")
+                    self.saved_frames += 1
 
                 cube_info_msg = CubeTracking()
                 cube_info_msg.sizes = size_list
