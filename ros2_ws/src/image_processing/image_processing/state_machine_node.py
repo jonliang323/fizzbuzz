@@ -116,6 +116,7 @@ class StateMachineNode(Node):
         obj_types = msg.obj_types
         sizes = msg.sizes
         x_centers = msg.x_centers
+        y_centers = msg.y_centers
         block_pixels = msg.block_pixels
 
         #two cases when we want to scan the blocks (run YOLO classification)
@@ -125,9 +126,9 @@ class StateMachineNode(Node):
                 closest = self.find_closest_index(sizes)
                 rel_angle = math.atan((self.FOV_XY[0]/2 - x_centers[closest])/self.FOCAL_X)*180/math.pi
                 closest_obj = {"size":sizes[closest], "angle":int(self.current_angle + rel_angle), "type":self.CLASSES[obj_types[closest]]}
-                self.current_stack = self.find_stack(closest, closest_obj)
+                self.current_stack = self.find_stack(closest, closest_obj, x_centers, y_centers, sizes, obj_types)
                 self.detected_objects.append(closest_obj)
-                self.get_logger().info(f'detected: {self.detected_objects}') #here
+                self.get_logger().info(f'detected stack: {self.current_stack}') #here
             #otherwise, detected objects is not changed
         elif self.target_drive:
             #find block screen ratio
@@ -173,7 +174,7 @@ class StateMachineNode(Node):
 
             if self.scan_270_active:
                 #spins full 270
-                if self.turn_angle <= 270:
+                if self.turn_angle <= 0:
                     #turns 270 degrees
                     #scan_blocks is initially true
                     self.get_logger().info(f'target: {self.turn_angle}, angle diff: {self.turn_angle - self.current_angle}') #here
@@ -189,26 +190,27 @@ class StateMachineNode(Node):
                         self.scan_blocks = True
                         self.turn_angle += 90
                 else: #scan is complete
-                    deltaL = 0
-                    deltaR = 0
-                    #process list
-                    if len(self.detected_objects) > 0:
-                        closest = self.find_closest_index([obj["size"] for obj in self.detected_objects])
-                        self.target = self.detected_objects[closest]
-                        self.get_logger().info(f'\n\n scan complete, closest object is {self.target["type"]},\nat an angle of {self.target["angle"]}')
-                        self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
-                        self.get_logger().info(f'These are our objects: {self.detected_objects}')
-                        self.detected_objects = []
-                        self.scan_270_active = False
-                        #self.target_align = True
-                        self.prev_error_turn = 0
-                    elif len(self.detected_objects) == 0: #and self.stack_counter < 5:
-                        #TODO: if no cubes found while there are still cubes to be found --> scan again
-                        self.turn_angle = 0
-                        self.scan_blocks = False
-                        self.get_logger().info('found no objects')
-                    else:
-                        self.activate_dumptruck()
+                    pass
+                    # deltaL = 0
+                    # deltaR = 0
+                    # #process list
+                    # if len(self.detected_objects) > 0:
+                    #     closest = self.find_closest_index([obj["size"] for obj in self.detected_objects])
+                    #     self.target = self.detected_objects[closest]
+                    #     self.get_logger().info(f'\n\n scan complete, closest object is {self.target["type"]},\nat an angle of {self.target["angle"]}')
+                    #     self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
+                    #     self.get_logger().info(f'These are our objects: {self.detected_objects}')
+                    #     self.detected_objects = []
+                    #     self.scan_270_active = False
+                    #     #self.target_align = True
+                    #     self.prev_error_turn = 0
+                    # elif len(self.detected_objects) == 0: #and self.stack_counter < 5:
+                    #     #TODO: if no cubes found while there are still cubes to be found --> scan again
+                    #     self.turn_angle = 0
+                    #     self.scan_blocks = False
+                    #     self.get_logger().info('found no objects')
+                    # else:
+                    #     self.activate_dumptruck()
 
             if self.target_align:
                 #if abs(self.target['angle'] - self.current_angle) > 5:
@@ -411,20 +413,19 @@ class StateMachineNode(Node):
                 max_s_i = i
         return max_s_i
     
-    def find_stack(self, index_of_closest, closest_obj):
+    def find_stack(self, index_of_closest, closest_obj, x_centers, y_centers, sizes, obj_types):
         #find stack of blocks
-        msg = CubeTracking()
         stack_partner_index = None
-        for x in msg.x_centers:
-            diff = x - msg.x_centers[index_of_closest]
+        for x in x_centers:
+            diff = int(x - x_centers[index_of_closest])
             if diff < 20: #difference of 20 pixels
-                stack_partner_index = msg.x_centers.index(x)
-                rel_angle = int(math.atan((self.FOV_XY[0]/2 - msg.x_centers[stack_partner_index])/self.FOCAL_X)*180/math.pi)
-                stack_partner = {"size":msg.sizes[stack_partner_index], "angle":self.current_angle + rel_angle, "type":self.CLASSES[msg.obj_types[stack_partner_index]]}
+                stack_partner_index = x_centers.index(x)
+                rel_angle = int(math.atan((self.FOV_XY[0]/2 - x_centers[stack_partner_index])/self.FOCAL_X)*180/math.pi)
+                stack_partner = {"size":sizes[stack_partner_index], "angle":self.current_angle + rel_angle, "type":self.CLASSES[obj_types[stack_partner_index]]}
         if stack_partner_index == None:
             bottom = closest_obj
             top = None
-        elif msg.y_centers[stack_partner_index] < msg.y_centers[index_of_closest]:
+        elif y_centers[stack_partner_index] < y_centers[index_of_closest]:
             bottom = stack_partner
             top = closest_obj
         else:
