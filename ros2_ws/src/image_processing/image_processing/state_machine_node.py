@@ -174,7 +174,7 @@ class StateMachineNode(Node):
 
             if self.scan_270_active:
                 #spins full 270
-                if self.turn_angle <= 0: #320
+                if self.turn_angle <= 320: #320
                     #turns 270 degrees
                     #scan_blocks is initially true
                     self.get_logger().info(f'target: {self.turn_angle}, current: {self.current_angle}, angle diff: {self.turn_angle - self.current_angle}') #here
@@ -190,28 +190,28 @@ class StateMachineNode(Node):
                         self.scan_blocks = True
                         self.turn_angle += 40
                 else: #scan is complete
-                    pass
-                    # deltaL = 0
-                    # deltaR = 0
-                    # #process list
-                    # if len(self.detected_objects) > 0:
-                    #     closest = self.find_closest_index([obj["size"] for obj in self.detected_objects])
-                    #     self.target = self.detected_objects[closest]
-                    #     self.get_logger().info(f'\n\n scan complete, closest object is {self.target["type"]},\nat an angle of {self.target["angle"]}')
-                    #     self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
-                    #     self.get_logger().info(f'These are our objects: {self.detected_objects}')
-                    #     self.detected_objects = []
-                    #     self.scan_270_active = False
-                    #     # self.target_align = True
-                    #     self.prev_error_turn = 0
-                    # elif len(self.detected_objects) == 0: #and self.stack_counter < 5:
-                    #     #TODO: if no cubes found while there are still cubes to be found --> scan again
-                    #     self.turn_angle = 0
-                    #     self.scan_blocks = False
-                    #     self.get_logger().info('found no objects')
-                    # else:
-                    #     self.get_logger().info('going to dump')
-                    #     # self.activate_dumptruck()
+                    # pass
+                    deltaL = 0
+                    deltaR = 0
+                    #process list
+                    if len(self.detected_objects) > 0:
+                        closest = self.find_closest_index([obj["size"] for obj in self.detected_objects])
+                        self.target = self.detected_objects[closest]
+                        self.get_logger().info(f'\n\n scan complete, closest object is {self.target["type"]},\nat an angle of {self.target["angle"]}')
+                        self.get_logger().info(f'\n\n{len(self.detected_objects)} detected_objects\n\n')
+                        self.get_logger().info(f'These are our objects: {self.detected_objects}')
+                        self.detected_objects = []
+                        self.scan_270_active = False
+                        # self.target_align = True
+                        self.prev_error_turn = 0
+                    elif len(self.detected_objects) == 0: #and self.stack_counter < 5:
+                        #TODO: if no cubes found while there are still cubes to be found --> scan again
+                        self.turn_angle = 0
+                        self.scan_blocks = False
+                        self.get_logger().info('found no objects')
+                    else:
+                        self.get_logger().info('going to dump')
+                        # self.activate_dumptruck()
 
             if self.target_align:
                 self.get_logger().info(f'aligning....target angle: {self.target['angle']}, current angle: {self.current_angle}')
