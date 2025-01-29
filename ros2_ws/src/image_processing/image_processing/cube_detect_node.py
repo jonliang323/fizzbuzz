@@ -60,7 +60,7 @@ class CubeDetectNode(Node):
         all_locs = sorted(blue_locs + orange_locs, key=lambda x:(x[1],x[0])) #sort (row, col, color) locs by col, then row
         #find average pixel boundary height (for orange + blue combined)
         avg_boundary_pixel = 0
-        otr = 0
+        otr = 0.0
         if len(all_locs) > 0:
             col = 0
             #finds maximum orange,blue row values associated to each col, then clears image above that row
@@ -88,6 +88,7 @@ class CubeDetectNode(Node):
 
         wall_info_msg = WallInfo()
         wall_info_msg.orange_tape_ratio = otr
+        self.get_logger().info(f'this is the value: {avg_boundary_pixel}')
         wall_info_msg.avg_height = avg_boundary_pixel
         wall_info_msg.height_range = orange_height_range
         self.wall_info_pub.publish(wall_info_msg)
@@ -111,13 +112,15 @@ class CubeDetectNode(Node):
                 coords = boxes.xyxy[i]
                 x1,x2 = coords[0],coords[2]
                 y1,y2 = coords[1],coords[3]
+                self.get_logger().info(f'xs {x1, x2}, ys {y1, y2}')
                 w = x2-x1
                 h = y2-y1
-                size = w*h
+                size = int(w*h)
                 new_box_overlap = 0
                 for entry in covered: #finds overlap between this box and all others
                     #overlap += self.find_box_overlap(entry,(x1,x2,y1,y2))
                     xE1, xE2, yE1, yE2 = entry[0], entry[1], entry[2], entry[3]
+                    x_overlap, y_overlap = 0, 0
                     if x1 > xE1 and x1 < xE2 or x2 > xE1 and x2 < xE2:
                         x_list = sorted([x1,x2,xE1,xE2])
                         x_overlap = x_list[2]-x_list[1]
@@ -133,14 +136,14 @@ class CubeDetectNode(Node):
                 x_center_list.append((x1+x2)/2)
                 y_center_list.append((y1+y2)/2)
 
-
+            self.get_logger().info(f'{obj_type_list}\n{size_list}\n{x_center_list}\n{y_center_list}\n{block_pixels}')
             cube_info_msg = CubeTracking()
             cube_info_msg.sizes = size_list
             cube_info_msg.obj_types = obj_type_list
             cube_info_msg.x_centers = x_center_list
             cube_info_msg.block_pixels = block_pixels
             cube_info_msg.y_centers = y_center_list
-            self.cube_pub.publish(cube_info_msg)
+            self.cube_info_pub.publish(cube_info_msg)
     
 def main(args=None):
     rclpy.init()
