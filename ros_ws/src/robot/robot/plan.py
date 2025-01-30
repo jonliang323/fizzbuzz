@@ -225,13 +225,15 @@ class PlanNode(Node):
             path.distance = abs(r*theta)*percent
         
         self.path_pub.publish(path)
-        self.wait_path()
         self.get_logger().info(f"Path {path.left:.3f}, {path.right:.3f}, {path.distance:.3f}")
+        self.wait_path()
 
     ####################### main program functions ##########################
 
     # stacks after object inside chute
     def stack(self):
+        self.get_logger().info("Stacking")
+
         self.open_claw()
         self.drop_elevator()
         self.close_claw()
@@ -250,6 +252,7 @@ class PlanNode(Node):
 
     def collect_green(self):
         self.get_logger().info("Collecting green")
+
         self.open_flap()
 
         # drive forward
@@ -260,6 +263,7 @@ class PlanNode(Node):
 
     def collect_red(self):
         self.get_logger().info("Collecting red")
+
         # drive to block
         self.pub_path(1, 1, 4) #TODO
         self.wait_path()
@@ -270,6 +274,7 @@ class PlanNode(Node):
 
     def collect_sphere(self):
         self.get_logger().info("Collecting sphere")
+
         self.drop_bucket()
 
         # knock off ball (drive backward)
@@ -293,7 +298,7 @@ class PlanNode(Node):
             self.collect_sphere()
         
         # collect in proper order
-        if self.bottom_red:
+        if self.bottom_color:
             self.collect_red()
             self.collect_green()
         else:
@@ -307,6 +312,9 @@ class PlanNode(Node):
         self.bottom_color = self.closest_block()
         x, y = self.block_coordinates(self.bottom_color)
         distance = math.sqrt(x**2 + y**2)
+
+        # log move
+        self.get_logger().info(f"Closest color is {"green" if self.bottom_color==Color.GREEN else "red"} at {x}, {y}: distance {distance}")
 
         DIST_THRESH = 12 # inches
         DIST_RECALC = 10 # inches
@@ -323,13 +331,21 @@ class PlanNode(Node):
             self.bottom_color = self.closest_block()
             x, y = self.block_coordinates(self.bottom_color)
 
+            # relog for double take
+            self.get_logger().info(f"Closest color is {"green" if self.bottom_color==Color.GREEN else "red"} at {x}, {y}: distance {distance}")
+
         # drive all the way to the block
         self.drive_to(x, y, 1)
 
+        # drive a bit more forward to align stack
+        self.pub_path(1, 1, 2)
+        self.wait_path()
+
     def search(self):
-        # for now just spinning
-        # TODO add move searching if needed
         self.get_logger().info("Search started")
+
+        # for now just spinning
+        # TODO add move searching if needed (probably not)
 
         # spin until sees block
         while True:
@@ -362,7 +378,7 @@ class PlanNode(Node):
 
         self.get_logger().info("Program ended")
 
-        # peacefully close ros action
+        # close ros action server
         goal.succeed()
         return Start.Result()
 
