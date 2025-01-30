@@ -11,10 +11,13 @@ find_package(ament_cmake REQUIRED)
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
 
+find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   msg/Path.msg
+  msg/Detect.msg
   msg/CubeTracking.msg
   msg/CVStates.msg
   msg/WallInfo.msg
@@ -22,6 +25,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   msg/DCCommand.msg
   msg/ServoCommand.msg
   msg/EncoderCounts.msg
+  DEPENDENCIES geometry_msgs std_msgs
 ) 
 
 if(BUILD_TESTING)

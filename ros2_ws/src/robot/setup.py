@@ -29,15 +29,8 @@ setup(
         'console_scripts': [
             'imu = robot.imu:main',
             'move = robot.move:main',
-
-            # 'state_machine = robot.state_machine_node:main',
-            # 'mock_state_machine = robot.mock_state_machine_node:main',
-            # 'cube_detect_subscriber = robot.cube_detect_node:main',
-            # 'raven_subscriber = robot.raven_node:main',
-            # 'test_motor_subscriber = robot.test_motor_node:main',
-            # 'pic_subscriber = robot.pic_node:main',
-            # 'live_label_subscriber = robot.live_label_node:main',
-            # 'test_elevator_subscriber = robot.test_elevator_node:main',
+            'vision = robot.vision:main',
+            'plan = robot.plan:main',
         ],
     },
 )

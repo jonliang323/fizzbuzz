@@ -1,3 +1,3 @@
 float32 left
 float32 right
-float32 rotations
+float32 distance

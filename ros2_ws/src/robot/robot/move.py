@@ -12,35 +12,34 @@
 # ros2 topic pub /path interfaces/msg/Path "{left: 1, right: -1, distance: 500}" --once
 # ros2 launch robot camera_launch.py
 # ros2 topic pub /path interfaces/msg/Path"{left: 1.0, right: 1.0, distance: 5000}" --once
-#
+# ros2 topic pub /bucket std_msgs/msg/Bool "{data: True}" --once
 
 import math
-import time
 
-import numpy as np
 import rclpy
-import RPi.GPIO as GPIO
-from gpiozero import Button
 from interfaces.msg import Path
 from raven import Raven
 from rclpy.node import Node
-from std_msgs.msg import Float32, String
+from std_msgs.msg import Bool, Float32
+
+DT = 0.02
 
 TICK_ROT = 640
 
-WHEEL_D = 78.0
-BASE_D = 241.0
+# 33
+WHEEL_D = 79.0
+BASE_D = 269.0 #8.75 11.5
 BASE_RATIO = WHEEL_D / BASE_D
 
-MAX_VEL = 1.5 * TICK_ROT
-ACCEL = 1 * TICK_ROT
+MAX_VEL = 1.1 * TICK_ROT
+ACCEL = 0.8 * TICK_ROT
 
 TURN_CONST = BASE_RATIO * 2 * math.pi / TICK_ROT
-ANGLE_PROP = 600
+ANGLE_PROP = 700
 
 LEFT_MOTOR = Raven.MotorChannel.CH4
 RIGHT_MOTOR = Raven.MotorChannel.CH1
-BUCKET_MOTOR = Raven.MotorChannel.CH3
+BUCKET_MOTOR = Raven.MotorChannel.CH5
 
 class MoveNode(Node):
     def __init__(self):
@@ -66,18 +65,18 @@ class MoveNode(Node):
         self.raven.set_motor_encoder(LEFT_MOTOR, 0)
         self.raven.set_motor_mode(LEFT_MOTOR, Raven.MotorMode.POSITION)
         self.raven.set_motor_torque_factor(LEFT_MOTOR, 80)
-        self.raven.set_motor_pid(LEFT_MOTOR, p_gain=20, i_gain=3, d_gain=.1)
+        self.raven.set_motor_pid(LEFT_MOTOR, p_gain=20, i_gain=1, d_gain=.25)
         self.raven.set_motor_target(LEFT_MOTOR, 0)
         
         self.raven.set_motor_encoder(RIGHT_MOTOR, 0)
         self.raven.set_motor_mode(RIGHT_MOTOR, Raven.MotorMode.POSITION)
         self.raven.set_motor_torque_factor(RIGHT_MOTOR, 80)
-        self.raven.set_motor_pid(RIGHT_MOTOR, p_gain=-20, i_gain=-3, d_gain=-.1)
+        self.raven.set_motor_pid(RIGHT_MOTOR, p_gain=-20, i_gain=-1, d_gain=-.25)
         self.raven.set_motor_target(RIGHT_MOTOR, 0)
 
         # dump dc motor
         self.raven.set_motor_mode(BUCKET_MOTOR, Raven.MotorMode.DIRECT)
-        self.raven.set_motor_torque_factor(BUCKET_MOTOR, 80)
+        self.raven.set_motor_torque_factor(BUCKET_MOTOR, 100)
         self.raven.set_motor_speed_factor(BUCKET_MOTOR, 0)
 
         self.create_subscription(Float32, 'imu', self.imu_callback, 10)
@@ -89,10 +88,11 @@ class MoveNode(Node):
         self.create_subscription(Float32, 'elevator', self.elevator_callback, 10)
         self.create_subscription(Float32, 'flap', self.flap_callback, 10)
 
-        self.path_timer = self.create_timer(.01, self.update_path)
+        self.moving_pub = self.create_publisher(Bool, 'moving', 10)
+
+        self.path_timer = self.create_timer(DT, self.update_path)
 
         self.get_logger().info("Move node has started")
-
 
     def duck_callback(self, msg):
         self.raven.set_servo_position(Raven.ServoChannel.CH1, msg.data, 500, 2500)
@@ -113,10 +113,10 @@ class MoveNode(Node):
             self.angle_updated = True
 
     def bucket_callback(self, msg):
-        self.raven.set_motor_speed_factor(BUCKET_MOTOR, msg.data)
+        self.raven.set_motor_speed_factor(BUCKET_MOTOR, abs(msg.data), reverse=msg.data<0)
 
     def path_callback(self, msg):
-        self.start_path(-msg.left, msg.right, msg.rotations * TICK_ROT)
+        self.start_path(-msg.left, msg.right, msg.distance*25.4/(math.pi*WHEEL_D) * TICK_ROT)
 
     def start_path(self, left_coef, right_coef, distance):
         self.total_dist = distance
@@ -131,18 +131,21 @@ class MoveNode(Node):
         if not self.angle_updated:
             return
 
-        DT = .01
         delta_speed = ACCEL * DT
 
-        target_speed = 0
+        target_speed = 0.0
         # Do i need to slow down? If yes, starts slowing down, else speed up or stay same
         if((self.total_dist - self.current_dist) <= (self.last_speed ** 2) / (2 * ACCEL)):
-           target_speed = max(self.last_speed - delta_speed, 0)
+           target_speed = max(self.last_speed - delta_speed, 0.0)
         else:
             target_speed = min(self.last_speed + delta_speed, MAX_VEL)
 
         self.current_dist += (self.last_speed + target_speed) / 2 * DT
         self.last_speed = target_speed
+
+        status = Bool()
+        status.data = target_speed != 0.0
+        self.moving_pub.publish(status)
 
         target_angle = -(self.right_coef + self.left_coef)/2.0 * TURN_CONST * self.current_dist
 
