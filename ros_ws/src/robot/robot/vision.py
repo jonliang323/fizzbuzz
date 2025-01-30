@@ -1,5 +1,3 @@
-import math
-
 import rclpy
 from cv_bridge import CvBridge
 from interfaces.msg import Box, Detect
@@ -39,10 +37,10 @@ class VisionNode(Node):
 
         # initialize boxes
         for i in range(2):
-            widest[i].x = 0.0
-            widest[i].y = 0.0
-            widest[i].width = 0.0
-            widest[i].height = 0.0
+            widest[i].x = 0
+            widest[i].y = 0
+            widest[i].width = 0
+            widest[i].height = 0
 
         for i in range(len(results[0].boxes)):
             # get box data
@@ -64,14 +62,14 @@ class VisionNode(Node):
                 continue
 
             # is touching edges
-            if x_min < EDGE_TOLERANCE or x_max > (640-1-EDGE_TOLERANCE) or y_min < EDGE_TOLERANCE or y_max > (480-1-EDGE_TOLERANCE):
+            if x_min < EDGE_TOLERANCE or x_max > (640-1-EDGE_TOLERANCE) or y_max > (480-1-EDGE_TOLERANCE):
                 continue
 
             # set box variables
-            widest[i].width = width
-            widest[i].height = y_max - y_min
-            widest[i].x = int((x_min+x_max)/2) - 320
-            widest[i].y = int((y_min+y_max)/2)
+            widest[color].width = int(width)
+            widest[color].height = int(y_max - y_min)
+            widest[color].x = int((x_min+x_max)/2) - 320
+            widest[color].y = int((y_min+y_max)/2)
         
         detect = Detect()
         detect.green = widest[0]

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import threading
 import math
 import time
 from enum import Enum
@@ -58,8 +59,8 @@ class PlanNode(Node):
     #################### helper vision functions ########################
     # waits until new detect data from cv
     def wait_detect(self):
-        # maybe wait because of cv pipeline delay
-        time.sleep(1) #TODO
+        # wait because of cv pipeline delay
+        time.sleep(2.7)
         self.load_detect = True
         while self.load_detect:
             time.sleep(0.1)
@@ -104,8 +105,7 @@ class PlanNode(Node):
         y -= 0.5
 
         return (x,y)
-        
-    
+
     ###################### callback functions ##########################
     def detect_callback(self, msg):
         if self.load_detect:
@@ -114,7 +114,6 @@ class PlanNode(Node):
 
     def moving_callback(self, msg):
         self.moving = msg.data
-        self.get_logger().info(str(self.moving))
 
     ################## helper publish functions ######################
     # left and right are coefficients
@@ -142,21 +141,21 @@ class PlanNode(Node):
     def pub_claw(self, position):
         msg = Float32()
         msg.data = float(position)
-        self.duck_pub.publish(msg)
+        self.claw_pub.publish(msg)
     
     def pub_elevator(self, position):
         msg = Float32()
         msg.data = float(position)
-        self.duck_pub.publish(msg)
+        self.elevator_pub.publish(msg)
     
     def pub_flap(self, position):
         msg = Float32()
         msg.data = float(position)
-        self.duck_pub.publish(msg)
+        self.flap_pub.publish(msg)
 
     ################## helper time compensated move functions ######################
     def pivot_45(self):
-        self.path_pub(1, -1, 33) #TODO
+        self.pub_path(1, -1, 33/8) #TODO
         self.wait_path()
 
     def lift_bucket(self):
@@ -169,7 +168,7 @@ class PlanNode(Node):
     
     def lift_duck(self):
         self.pub_duck(-80) #TODO
-        time.sleep(1.5) #TODO
+        time.sleep(2) #TODO
 
     def drop_duck(self):
         self.pub_duck(70) #TODO
@@ -296,14 +295,20 @@ class PlanNode(Node):
             self.has_sphere = True
 
             self.collect_sphere()
+
+            # swap colors because sphere pulls block
+            if self.bottom_color == Color.GREEN:
+                self.bottom_color = Color.RED
+            else:
+                self.bottom_color = Color.GREEN
         
         # collect in proper order
-        if self.bottom_color:
-            self.collect_red()
+        if self.bottom_color == Color.GREEN:
             self.collect_green()
+            self.collect_red()
         else:
-            self.collect_green()
             self.collect_red()
+            self.collect_green()
 
     def approach(self):
         self.get_logger().info("Approach started")
@@ -337,9 +342,9 @@ class PlanNode(Node):
         # drive all the way to the block
         self.drive_to(x, y, 1)
 
-        # drive a bit more forward to align stack
+        # delay
         self.pub_path(1, 1, 2)
-        self.wait_path()
+        
 
     def search(self):
         self.get_logger().info("Search started")
@@ -363,20 +368,30 @@ class PlanNode(Node):
 
         # TODO drive towards orange wall
 
-    # program entry point
-    def start_callback(self, goal):
+
+    def run(self):
         self.get_logger().info("Program started")
+
+        # grab next CV
         self.wait_detect()
+
+        self.search()
+        self.approach()
         
-        for i in range(5):
-            # TODO add drop off logic at the end either timer or loop
-            self.search()
-            self.approach()
-            self.collect_all()
+        # for i in range(5):
+        #     # TODO add drop off logic at the end either timer or loop
+        #     self.search()
+        #     self.approach()
+        #     self.collect_all()
         
-        self.deploy()
+        # self.deploy()
 
         self.get_logger().info("Program ended")
+
+    # program entry point
+    def start_callback(self, goal):
+        run_thread = threading.Thread(target=self.run, args=(), daemon=True)
+        run_thread.start()
 
         # close ros action server
         goal.succeed()

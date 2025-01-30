@@ -26,7 +26,7 @@ def generate_launch_description():
     vision_node = Node(
         package='robot',
         executable='vision',
-        output='screen'
+        output='log'
     )
 
     imu_node = Node(
