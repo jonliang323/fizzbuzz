@@ -36,7 +36,7 @@ class StateMachineNode(Node):
         self.turn_angle = 40
         #self.current_pos = (0, 0)
 
-        self.camera_startup = False
+        self.camera_startup = True
 
         # 360 scan variables
         self.scan_270_active = False
@@ -57,8 +57,8 @@ class StateMachineNode(Node):
         self.prev_error_turn = 0
         self.error_integralL_turn, self.error_integralR_turn= 0,0
         #gains should result in critical damping, best response
-        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 1.8,0.01,0.1
-        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 1.8,0.01,0.1
+        self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn = 2,0.01,0.1
+        self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn = 2,0.01,0.1
 
         #turn drive state, PID
         self.target_drive = False
@@ -76,7 +76,7 @@ class StateMachineNode(Node):
         self.x_lefts = None
         self.y_tops = None
         self.X_ALIGN = 579
-        self.Y_ALIGN = 360
+        self.Y_ALIGN = 320
         self.lost = False
         self.pixel_error = 0
 
@@ -86,7 +86,7 @@ class StateMachineNode(Node):
         self.orange_wall_found = False
 
         #elevator variables
-        self.block_intake = True #True
+        self.block_intake = False #True
         self.first_sphere_grabbed = True
         self.red_counter = 0
         self.elevator_timer_count = 0
@@ -218,11 +218,11 @@ class StateMachineNode(Node):
 
             if self.scan_270_active:
                 #spins full 270
-                if self.turn_angle <= 0: #320
+                if self.turn_angle <= 320: #320
                     #turns 270 degrees
                     #scan_blocks is initially true
                     self.get_logger().info(f'target: {self.turn_angle}, current: {self.current_angle}, angle diff: {self.turn_angle - self.current_angle}') #here
-                    if not self.yolo_scan and abs(self.current_angle - self.turn_angle) > 10: #ccw turn, + angle
+                    if not self.yolo_scan and abs(self.current_angle - self.turn_angle) > 8: #ccw turn, + angle
 
                         gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
                         gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
@@ -258,8 +258,8 @@ class StateMachineNode(Node):
                         self.get_logger().info(f'These are our objects: {self.detected_objects}')
                         self.detected_objects = []
                         self.scan_270_active = False
-                        # self.target_align = True
-                        self.target_drive = True
+                        self.target_align = True
+                        # self.target_drive = True
                         self.yolo_scan = True #should be False
                         self.save_scan = True #should be False
                         self.prev_error_turn = 0
@@ -274,7 +274,7 @@ class StateMachineNode(Node):
 
             if self.target_align:
                 self.get_logger().info(f'aligning....target angle: {self.target['angle']}, current angle: {self.current_angle}')
-                if abs(self.target['angle'] - self.current_angle) > 10:
+                if abs(self.target['angle'] - self.current_angle) > 8:
                 # if abs(self.turn_angle - self.current_angle) > 10:
                     #*** turn to face self.target["angle"] here:
                     gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
@@ -285,6 +285,7 @@ class StateMachineNode(Node):
                     #self.error_deriv = (angle_error - self.prev_error_turn)/self.dT
                     deltaL, deltaR = self.PID(angle_error, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
                     #self.get_logger().info(f'deltas: {deltaL, deltaR}')
+                    self.get_logger().info(f'target angle {self.target['angle']}')
                     self.prev_error_turn = angle_error
                 else:
                     #TODO constant scan for cube -> find % cube of screen -> have time delay? sparse scanning
@@ -303,15 +304,16 @@ class StateMachineNode(Node):
                 if (target_y_top < self.Y_ALIGN): #drive condition
                 # if (self.timer < 2):
                     #self.timer += self.dT
-                    gainsL = (self.p_gainL_drive, self.i_gainL_drive, self.d_gainL_drive)
-                    gainsR = (self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive)
+                    # gainsL = (self.p_gainL_drive, self.i_gainL_drive, self.d_gainL_drive)
+                    # gainsR = (self.p_gainR_drive, self.i_gainR_drive, self.d_gainR_drive)
 
-                    if not self.lost:
-                        self.pixel_error = self.X_ALIGN - target_x_left
-                    self.get_logger().info(f'x,y: {target_x_left, target_y_top}, error {self.pixel_error}')
+                    # if not self.lost:
+                    #     self.pixel_error = self.X_ALIGN - target_x_left
+                    # self.get_logger().info(f'x,y: {target_x_left, target_y_top}, error {self.pixel_error}')
 
-                    deltaL, deltaR = self.PID(self.pixel_error, self.prev_error_drive, self.error_integralL_drive, self.error_integralR_drive, gainsL, gainsR)
+                    # deltaL, deltaR = self.PID(self.pixel_error, self.prev_error_drive, self.error_integralL_drive, self.error_integralR_drive, gainsL, gainsR)
                     # deltaL = deltaR = 0
+                    self.get_logger().info(f'target y: {target_y_top}')
                     norm_speed = self.NORM_SPEED
                     self.prev_error_drive = self.pixel_error
 
@@ -321,7 +323,7 @@ class StateMachineNode(Node):
                     deltaL, deltaR = 0,0
                     self.yolo_scan = False
                     self.target_drive = False
-                    # self.block_intake = True
+                    self.block_intake = True
                     self.prev_error_drive = 0
 
             if self.block_intake:
@@ -374,7 +376,7 @@ class StateMachineNode(Node):
                             if self.intake_timer_count >= 1300:
                                 self.intake_timer_count = 0
                                 self.block_intake = False
-                                # self.scan_270_active = True
+                                self.scan_270_active = True
 
 
 
@@ -407,7 +409,7 @@ class StateMachineNode(Node):
                                 self.intake_timer_count = 0
                                 self.block_intake = False
                                 
-                                # self.scan_270_active = True
+                                self.scan_270_active = True
 
                         elif queue[0]["type"] == 'green':
                             #sequence here for green only
@@ -420,7 +422,7 @@ class StateMachineNode(Node):
                             if self.intake_timer_count >= 925:
                                 self.intake_timer_count = 0
                                 self.block_intake = False
-                                # self.scan_270_active = True
+                                self.scan_270_active = True
 
                         elif queue[0]["type"] == 'red':
                             #sequence here for red only
@@ -430,7 +432,7 @@ class StateMachineNode(Node):
                             if self.intake_timer_count >= 300:
                                 self.intake_timer_count = 0
                                 self.block_intake = False
-                                # self.scan_270_active = True
+                                self.scan_270_active = True
                     else:
                         if self.intake_timer_count < 75:
                             if queue[0]['type'] == 'green':
