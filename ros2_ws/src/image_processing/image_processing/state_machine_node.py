@@ -493,6 +493,9 @@ class StateMachineNode(Node):
         self.cv_pub.publish(scan_msg)
         self.motor_pub.publish(motor_msg)
 
+    def get_encoder_count(self, delta_x):
+        dtheta = delta_x/self.WHEEL_RADIUS
+        return int(dtheta * self.ENCODER_RES/(2*math.pi))
 
 
     def find_closest_index(self, sizes, types=None, filter_type=None):
