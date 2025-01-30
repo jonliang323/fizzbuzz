@@ -365,7 +365,7 @@ class StateMachineNode(Node):
                                 self.activate_bird()
                             # if self.intake_timer_count < 300 and self.intake_timer_count >= 400:
                             if self.duck and self.move_forward1 == False:
-                                self.get_encoder_count(12)
+                                encoder_posL = encoder_posR = self.get_encoder_count(12)
                                 self.move_forward1 = True
                             if self.duck and self.move_forward1 and self.flap == False:
                                 self.angle4_flap = -90
@@ -373,7 +373,7 @@ class StateMachineNode(Node):
                                 self.flap = True
                             if self.duck and self.move_forward1 and self.flap and self.move_forward2 == False:
                                 # norm_speed = 30  #move forward some so green is in elevator shaft
-                                self.get_encoder_count(7)
+                                encoder_posL = encoder_posR = self.get_encoder_count(7)
                                 self.move_forward2 = True
                             if self.duck and self.move_forward1 and self.flap and self.move_forward2 and self.elevator == False:
                                 self.activate_elevator()
@@ -389,10 +389,9 @@ class StateMachineNode(Node):
 
                             # if self.intake_timer_count >= 0 and self.intake_timer_count < 25*factor:
                             if self.move_forward1 == False:
-                                # norm_speed = 30 #move forward some so green is in elevator shaft
-                                self.get_encoder_count(7)
-                                # self.intake_timer_count +=1
-                                # self.get_logger().info("going to elevator activation")
+                                #move forward some so green is in elevator shaft
+                                encoder_posL = encoder_posR = self.get_encoder_count(7)
+                                
                                 self.move_forward1 = True
                             # if self.intake_timer_count >= 25*factor and self.intake_timer_count < 925:
                             if self.move_forward1 and self.elevator == False: 
@@ -404,7 +403,7 @@ class StateMachineNode(Node):
                             if self.move_forward1 and self.elevator and self.move_forward2 == False:
                                 # norm_speed = 30 #move forward some so red is flush with flap
                                 # self.intake_timer_count+=1
-                                self.get_encoder_count(10)
+                                encoder_posL = encoder_posR = self.get_encoder_count(10)
                                 self.move_forward2 = True
 
                             # if self.intake_timer_count >= 975*factor and self.intake_timer_count < 1275*factor:
@@ -427,7 +426,7 @@ class StateMachineNode(Node):
                             # if self.intake_timer_count < 25:
                             if self.move_forward1 == False:
                                 # norm_speed = 30 #move forward some so green is in elevator shaft
-                                self.get_encoder_count(7)
+                                encoder_posL = encoder_posR = self.get_encoder_count(7)
                                 # self.intake_timer_count+=
                                 self.move_forward1 = True
                             # if self.intake_timer_count >= 25 and self.intake_timer_count < 825:
@@ -464,8 +463,10 @@ class StateMachineNode(Node):
                             self.get_logger().info('moving')
                             # self.intake_timer_count +=1
                             # norm_speed = 30
-                            self.get_encoder_count(13.46)
-                            self.move_forward3 = True
+                            encoder_posL = encoder_posR = self.get_encoder_count(13.46)
+
+                            if encoder_posL ==  self.get_encoder_count(13.46):
+                                self.move_forward3 = True
 
                         # if self.intake_timer_count >= 125*factor and self.intake_timer_count < 175*factor:
                         if self.first_flap and self.move_forward3:

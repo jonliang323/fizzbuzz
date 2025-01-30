@@ -61,8 +61,10 @@ class RavenNode(Node):
 
         # Make the motor spin until 4400 counts (10 rev of wheel motor)
         self.raven_board.set_motor_target(Raven.MotorChannel.CH1, dc.encoder_pos1)
-        self.raven_board.set_motor_target(Raven.MotorChannel.CH4, dc.encoder_pos2)        
+        self.raven_board.set_motor_target(Raven.MotorChannel.CH4, dc.encoder_pos4)        
         self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH3, dt_speed, reverse=dt_rev)
+
+        self.get_logger().info(f'encoders {dc.encoder_pos1}, {dc.encoder_pos2}')
 
         # Torque controlled:
         # self.raven_board.set_motor_speed_factor(Raven.MotorChannel.CH1, 100) # Make motor try to run at max speed forward
