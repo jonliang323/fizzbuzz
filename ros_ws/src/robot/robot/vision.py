@@ -98,12 +98,12 @@ class VisionNode(Node):
 
             ############# HS FILTER #############
             hsv_box = hsv[y1:y2, x1:x2]
-            avg_h, avg_s = np.mean(hsv_box, axis=(0,1))[0:2]
+            avg_h, avg_s, avg_v = np.mean(hsv_box, axis=(0,1))
 
-            is_red = avg_h <= 15 or avg_h >= 165
-            is_green = avg_h >= 35 and avg_h <= 80
+            is_wall = avg_h > 160 and avg_h < 180 and avg_s < 0.1*255 and avg_v > 0.55*255 and avg_v < 0.75*255
+            #340°, 4%, 66% white wall in competition lighting
 
-            if avg_s <= 12 and not (is_red or is_green):
+            if is_wall:
                 continue
             ############# HS FILTER #############
 

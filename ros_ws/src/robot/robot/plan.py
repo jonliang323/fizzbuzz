@@ -427,7 +427,8 @@ class PlanNode(Node):
 
         # for now just spinning
         # TODO add move searching if needed (probably not)
-
+        self.pub_path(1,1,-4)
+        self.wait_path()
         # spin until sees block
         while True:
             if self.block_visible():
