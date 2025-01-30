@@ -56,7 +56,7 @@ class PlanNode(Node):
         self.open_flap()
 
         # other runtime variables
-        self.has_sphere = False
+        self.has_sphere = True
         self.bottom_color = Color.GREEN # set later
         self.startTime = 0
         self.started = False
@@ -184,7 +184,7 @@ class PlanNode(Node):
         self.pub_bucket(0)
 
     def drop_bucket(self):
-        self.pub_bucket(-100)
+        self.pub_bucket(100)
         time.sleep(4.2) #TODO
         self.pub_bucket(0)
     
@@ -193,7 +193,7 @@ class PlanNode(Node):
         time.sleep(2) #TODO
 
     def drop_duck(self):
-        self.pub_duck(70) #TODO
+        self.pub_duck(60) #TODO
         time.sleep(1.5) #TODO
 
     def open_claw(self):
@@ -282,7 +282,7 @@ class PlanNode(Node):
         self.open_flap()
 
         # drive forward
-        self.pub_path(1, 1, 6) #TODO
+        self.pub_path(1, 1, 8) #TODO
         self.wait_path() #TODO
 
         self.stack()
@@ -353,7 +353,10 @@ class PlanNode(Node):
                 self.bottom_color = Color.RED
             else:
                 self.bottom_color = Color.GREEN
-        
+        else:
+            #net movement from sphere collection
+            self.pub_path(1, 1, 3.5) #TODO
+            self.wait_path()
         # collect in proper order
         if self.bottom_color == Color.GREEN:
             self.collect_green()
@@ -467,6 +470,7 @@ class PlanNode(Node):
             complete = self.approach()
             if not complete:
                 continue
+            self.get_logger().info('going to collect')
             self.collect_all()
         
         self.deploy()

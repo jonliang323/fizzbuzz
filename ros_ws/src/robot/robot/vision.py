@@ -1,4 +1,5 @@
 import rclpy
+import cv2
 from cv_bridge import CvBridge
 from interfaces.msg import Box, Detect
 from rclpy.node import Node
@@ -20,6 +21,9 @@ class VisionNode(Node):
         self.detect_pub = self.create_publisher(Detect, 'detect', 1)
 
         self.get_logger().info("Starting vision node")
+        self.num_saved = 1
+        self.save = True
+        self.COLOR_VALUES = [(0,255,0), (255,0,0), (0,0,255)]
         
     def camera_callback(self, msg: CompressedImage):
         frame = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
@@ -70,6 +74,15 @@ class VisionNode(Node):
             widest[color].height = int(y_max - y_min)
             widest[color].x = int((x_min+x_max)/2) - 320
             widest[color].y = int((y_min+y_max)/2)
+
+            if self.save:
+                cv2.rectangle(frame,(x_min,y_min),(x_max,y_max),self.COLOR_VALUES[color],2) #output bounding box
+
+        if self.save:
+            cv2.imwrite(f'./pics/{self.num_saved}.jpg', frame)
+            self.num_saved += 1
+            if self.num_saved > 5:
+                self.save = False
         
         detect = Detect()
         detect.green = widest[1]
