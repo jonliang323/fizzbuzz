@@ -1,2 +1,0 @@
-int16 encoder1
-int16 encoder2

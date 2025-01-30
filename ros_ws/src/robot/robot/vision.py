@@ -1,11 +1,13 @@
+import math
+
 import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import CompressedImage
+from cv_bridge import CvBridge
 from geometry_msgs.msg import Point
 from interfaces.msg import Detect
-from cv_bridge import CvBridge
+from rclpy.node import Node
+from sensor_msgs.msg import CompressedImage
 from ultralytics import YOLO
-import math
+
 
 class VisionNode(Node):
     def __init__(self):
@@ -18,7 +20,7 @@ class VisionNode(Node):
 
         # self.cube_image_pub = self.create_publisher(CompressedImage, 'processed/compressed', 1)
 
-        self.detect_pub = self.create_publisher(Detect, 'detect', 10)
+        self.detect_pub = self.create_publisher(Detect, 'detect', 1)
 
         self.get_logger().info("Starting vision node")
         

@@ -16,16 +16,11 @@ find_package(std_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
-  msg/Path.msg
+  action/Start.action
+  msg/Box.msg
   msg/Detect.msg
-  msg/CubeTracking.msg
-  msg/CVStates.msg
-  msg/WallInfo.msg
-  msg/MotorCommand.msg
-  msg/DCCommand.msg
-  msg/ServoCommand.msg
-  msg/EncoderCounts.msg
-  DEPENDENCIES geometry_msgs std_msgs
+  msg/Path.msg
+  DEPENDENCIES std_msgs builtin_interfaces
 ) 
 
 if(BUILD_TESTING)

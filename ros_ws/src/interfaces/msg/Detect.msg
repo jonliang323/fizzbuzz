@@ -1,3 +1,5 @@
-geometry_msgs/Point red
-geometry_msgs/Point green
-geometry_msgs/Point sphere
+Box red
+Box green
+Box sphere
+uint16 orange_start
+uint16 orange_end

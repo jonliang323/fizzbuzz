@@ -5,17 +5,13 @@ import time
 from enum import Enum
 
 import rclpy
-from geometry_msgs.msg import Point
+from interfaces.action import Start
 from interfaces.msg import Detect, Path
+from rclpy.action import ActionServer
 from rclpy.node import Node
 from std_msgs.msg import Bool, Float32
 
 BASE_D = 269.0
-
-class State(Enum):
-    SEARCH = 0
-    APPROACH = 1
-    COLLECT = 2
 
 class Object(Enum):
     GREEN = 0
@@ -25,6 +21,9 @@ class Object(Enum):
 class PlanNode(Node):
     def __init__(self):
         super().__init__('plan')
+
+        # start action server
+        self._action_server = ActionServer(self, Start, 'start', self.start_callback)
 
         # computer vision
         self.load_detect = True
@@ -101,23 +100,23 @@ class PlanNode(Node):
 
     def pub_duck(self, position):
         msg = Float32()
-        msg.data = position
-        self.duck_pub.publish(position)
+        msg.data = float(position)
+        self.duck_pub.publish(msg)
     
     def pub_claw(self, position):
         msg = Float32()
-        msg.data = position
-        self.duck_pub.publish(position)
+        msg.data = float(position)
+        self.duck_pub.publish(msg)
     
     def pub_elevator(self, position):
         msg = Float32()
-        msg.data = position
-        self.duck_pub.publish(position)
+        msg.data = float(position)
+        self.duck_pub.publish(msg)
     
     def pub_flap(self, position):
         msg = Float32()
-        msg.data = position
-        self.duck_pub.publish(position)
+        msg.data = float(position)
+        self.duck_pub.publish(msg)
 
     ################## helper time compensated move functions ######################
     def lift_bucket(self):
@@ -223,6 +222,7 @@ class PlanNode(Node):
         self.lift_elevator()
 
     def collect_green(self):
+        self.get_logger().info("Collecting green")
         self.open_flap()
 
         # drive forward
@@ -232,6 +232,7 @@ class PlanNode(Node):
         self.stack()
 
     def collect_red(self):
+        self.get_logger().info("Collecting red")
         # drive to block
         self.pub_path(1, 1, 10) #TODO
         self.wait_path()
@@ -241,6 +242,7 @@ class PlanNode(Node):
 
 
     def collect_sphere(self):
+        self.get_logger().info("Collecting sphere")
         self.drop_bucket()
 
         # knock off ball (drive backward)
@@ -271,18 +273,35 @@ class PlanNode(Node):
             self.collect_green()
             self.collect_red()
 
-    def approach():
+    def approach(self):
+        self.get_logger().info("Approach started")
         pass
 
-    def search():
+    def search(self):
+        self.get_logger().info("Search started")
         pass
 
-    # main loop
-    def loop(self):
-        # TODO add drop off logic at the end either timer or loop
-        self.search()
-        self.approach()
-        self.collect_all()
+    def deploy(self):
+        self.get_logger().info("Deploy started")
+        pass
+
+    # program entry point
+    def start_callback(self, goal):
+        self.get_logger().info("Program started")
+        
+        for i in range(5):
+            # TODO add drop off logic at the end either timer or loop
+            self.search()
+            self.approach()
+            self.collect_all()
+        
+        self.deploy()
+
+        self.get_logger().info("Program ended")
+
+        # peacefully close ros action
+        goal.succeed()
+        return Start.Result()
 
 def main(args=None):
     rclpy.init(args=args)

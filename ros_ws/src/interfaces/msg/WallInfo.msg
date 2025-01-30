@@ -1,3 +1,0 @@
-float32 orange_tape_ratio 
-int16 avg_height
-int16 height_range
