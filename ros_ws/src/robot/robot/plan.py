@@ -13,10 +13,9 @@ from std_msgs.msg import Bool, Float32
 
 BASE_D = 269.0
 
-class Object(Enum):
+class Color(Enum):
     GREEN = 0
     RED = 1
-    SPHERE = 2
 
 class PlanNode(Node):
     def __init__(self):
@@ -52,7 +51,7 @@ class PlanNode(Node):
 
         # other runtime variables
         self.has_sphere = False
-        self.bottom_red = False # arbitrary (gets set later)
+        self.bottom_color = None # set later
 
         self.get_logger().info("Plan node has started")
 
@@ -65,10 +64,47 @@ class PlanNode(Node):
         while self.load_detect:
             time.sleep(0.1)
     
-    # makes sure detect data is good
-    # TODO probably should be in vision actually
-    def valid_detect(self):
-        pass # TODO
+    # returns boolean if valid block visible
+    def block_visible(self):
+        return self.detect.red.height != 0 or self.detect.green.height != 0
+    
+    # returns color of closest block
+    # requires block to exist
+    def closest_block(self):
+        if self.detect.green.height >= self.detect.red.height:
+            return Color.GREEN
+        return Color.RED
+    
+    # calculates x, y relative coordinates of closest block in inches
+    def block_coordinates(self, color):
+        box = None
+        if color == Color.GREEN:
+            box = self.detect.green
+        else:
+            box = self.detect.red
+
+        VFOV = 30*(math.pi/180)
+        HFOV = 1.04*VFOV*(640/480)
+        BLOCK_SIZE = 2 # inches
+
+        # calculate y
+        y = 480/(box.height*math.tan(VFOV/2))
+
+        # calculate x
+        theta = box.x * (HFOV/640)
+        x = float(BLOCK_SIZE*y*math.tan(theta)/2)
+
+        # account for blocks to the side looking too close
+        scalar = 1 + 0.04 * abs(x) / 5.8
+        x *= scalar
+        y *= scalar
+
+        # account for camera position offset
+        x -= 2.9
+        y -= 0.5
+
+        return (x,y)
+        
     
     ###################### callback functions ##########################
     def detect_callback(self, msg):
@@ -119,6 +155,10 @@ class PlanNode(Node):
         self.duck_pub.publish(msg)
 
     ################## helper time compensated move functions ######################
+    def pivot_45(self):
+        self.path_pub(1, -1, 33) #TODO
+        self.wait_path()
+
     def lift_bucket(self):
         self.pub_bucket(True)
         time.sleep(3) #TODO
@@ -160,21 +200,8 @@ class PlanNode(Node):
         time.sleep(1.0) #TODO
 
     ####################### approach drive functions ###############################
-    def drive_closest(self, object):
-        red = self.detect.red
-        green = self.detect.green
-        sphere = self.detect.sphere
-
-        if green.y == float('inf'):
-            return
-        
-        dx = green.x - 2.9
-        dy = green.y - 0.5
-
-        self.drive_to(dx, dy, 1)
-
     # drives to x, y relative coordinates
-    # percent of path 0-1
+    # percent of path 0.0-1.0
     def drive_to(self, x, y, percent):
         path = Path()
 
@@ -226,7 +253,7 @@ class PlanNode(Node):
         self.open_flap()
 
         # drive forward
-        self.pub_path(1, 1, 10) #TODO
+        self.pub_path(1, 1, 4) #TODO
         self.wait_path() #TODO
 
         self.stack()
@@ -234,7 +261,7 @@ class PlanNode(Node):
     def collect_red(self):
         self.get_logger().info("Collecting red")
         # drive to block
-        self.pub_path(1, 1, 10) #TODO
+        self.pub_path(1, 1, 4) #TODO
         self.wait_path()
 
         self.lift_duck()
@@ -252,7 +279,7 @@ class PlanNode(Node):
         self.open_flap()
 
         # drive to ball
-        self.pub_path(1, 1, 10) #TODO
+        self.pub_path(1, 1, 6) #TODO
         self.wait_path()
 
         # stack sequence
@@ -275,19 +302,55 @@ class PlanNode(Node):
 
     def approach(self):
         self.get_logger().info("Approach started")
-        pass
+
+        # find position closest block
+        self.bottom_color = self.closest_block()
+        x, y = self.block_coordinates(self.bottom_color)
+        distance = math.sqrt(x**2 + y**2)
+
+        DIST_THRESH = 12 # inches
+        DIST_RECALC = 10 # inches
+
+        if distance > DIST_THRESH:
+            # drive about 10 inches from block
+            percent = (distance-DIST_RECALC)/distance
+            self.drive_to(x, y, percent)
+
+            # get new block detect data
+            # TODO check if valid block seen
+            self.wait_detect()
+            # recalculate position of closest block
+            self.bottom_color = self.closest_block()
+            x, y = self.block_coordinates(self.bottom_color)
+
+        # drive all the way to the block
+        self.drive_to(x, y, 1)
 
     def search(self):
+        # for now just spinning
+        # TODO add move searching if needed
         self.get_logger().info("Search started")
-        pass
+
+        # spin until sees block
+        while True:
+            if self.block_visible():
+                break
+
+            # spin 45 degrees
+            self.pivot_45()
+
+            # get and wait for new data from cv
+            self.wait_detect()
 
     def deploy(self):
         self.get_logger().info("Deploy started")
-        pass
+
+        # TODO drive towards orange wall
 
     # program entry point
     def start_callback(self, goal):
         self.get_logger().info("Program started")
+        self.wait_detect()
         
         for i in range(5):
             # TODO add drop off logic at the end either timer or loop

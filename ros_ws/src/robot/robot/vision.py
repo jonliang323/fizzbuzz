@@ -2,8 +2,7 @@ import math
 
 import rclpy
 from cv_bridge import CvBridge
-from geometry_msgs.msg import Point
-from interfaces.msg import Detect
+from interfaces.msg import Box, Detect
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
 from ultralytics import YOLO
@@ -16,62 +15,75 @@ class VisionNode(Node):
         self.bridge = CvBridge()
         self.model = YOLO("src/robot/robot/weights.pt")
 
-        self.image_sub = self.create_subscription(CompressedImage, 'image_raw/compressed', self.image_callback, 1)
+        self.camera_sub = self.create_subscription(CompressedImage, 'image_raw/compressed', self.camera_callback, 1)
 
-        # self.cube_image_pub = self.create_publisher(CompressedImage, 'processed/compressed', 1)
+        # self.processed_pub = self.create_publisher(CompressedImage, 'processed/compressed', 1)
 
         self.detect_pub = self.create_publisher(Detect, 'detect', 1)
 
         self.get_logger().info("Starting vision node")
         
-    def image_callback(self, msg: CompressedImage):
+    def camera_callback(self, msg: CompressedImage):
         frame = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
+
+        # chop off top half of image
+        frame[:240, :] = 0
+
+        # run through model
         results = self.model(frame)
 
-        closest = [Point(), Point(), Point()]
+        widest = [Box(), Box()]
 
-        for i in range(3):
-            closest[i].x = 0.0
-            closest[i].y = float('inf')
-            closest[i].z = 0.0
+        MIN_WIDTH = 10
+        EDGE_TOLERANCE = 3
+        SQUARE_TOLERANCE = 0.7
 
-        VFOV = 30*(math.pi/180)
-        HFOV = 1.04*VFOV*(640/480)
-        
-        # Iterate over the detections to extract bounding box details
+        # initialize boxes
+        for i in range(2):
+            widest[i].x = 0.0
+            widest[i].y = 0.0
+            widest[i].width = 0.0
+            widest[i].height = 0.0
+
         for i in range(len(results[0].boxes)):
+            # get box data
             box = results[0].boxes[i]
             color = int(box.cls)
 
+            # ignore spheres
+            if color == 2:
+                continue
+
+            # check if widest
             x_min, y_min, x_max, y_max = box.xyxy[0]
-            height = y_max - y_min
+            width = x_max - x_min
+            if width <= widest[color].width:
+                continue
 
-            distance = 480/(height*math.tan(VFOV/2))
+            # minimum block width
+            if width < MIN_WIDTH:
+                continue
 
-            if distance < closest[color].y:
-                closest[color].y = float(distance)
-                x_pixels = (x_min + x_max - 640) / 2.0
-                theta = x_pixels * (HFOV/640)
+            # is touching edges
+            if x_min < EDGE_TOLERANCE or x_max > (640-1-EDGE_TOLERANCE) or y_min < EDGE_TOLERANCE or y_max > (480-1-EDGE_TOLERANCE):
+                continue
 
-                L = 2
-
-                x_dist = float(L*distance*math.tan(theta)/2)
-                closest[color].x = x_dist
-                scalar = 1 + 0.04 * abs(x_dist) / 5.8
-
-                closest[color].x *= scalar
-                closest[color].y *= scalar
-
-                # returns one if not touching top/bottom edges
-                closest[color].z = float(1.0 if (y_min > 0 and y_max < 480-1) else 0.0)
-
+            # set box variables
+            widest[i].width = width
+            widest[i].height = y_max - y_min
+            widest[i].x = int((x_min+x_max)/2) - 320
+            widest[i].y = int((y_min+y_max)/2)
+        
         detect = Detect()
-        detect.green = closest[0]
-        detect.red = closest[1]
-        detect.sphere = closest[2]
+        detect.green = widest[0]
+        detect.red = widest[1]
 
         # Publish the positions of the blocks
         self.detect_pub.publish(detect)
+
+        # Publish processed image
+        # compressed_img_msg = self.bridge.cv2_to_compressed_imgmsg(frame)
+        # self.processed_pub.publish(compressed_img_msg)
         
 def main(args=None):
     rclpy.init(args=args)
