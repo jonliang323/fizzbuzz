@@ -365,7 +365,7 @@ class StateMachineNode(Node):
                             if self.intake_timer_count >= 400 and self.intake_timer_count < 450:
                                 self.angle4_flap = -90
                                 self.intake_timer_count +=1
-                            if self.intake_timer_count >= 450 and self.intake_timer_count < 500:
+                            if self.intake_timer_count >= 450 and self.intake_timer_count < 575:
                                 norm_speed = 30  #move forward some so green is in elevator shaft
                                 self.intake_timer_count +=1
                             if self.intake_timer_count >= 500 and self.intake_timer_count < 1300:
@@ -391,11 +391,11 @@ class StateMachineNode(Node):
                                 self.activate_elevator()
                                 self.intake_timer_count +=1
 
-                            if self.intake_timer_count >= 925 and self.intake_timer_count < 975: 
+                            if self.intake_timer_count >= 925 and self.intake_timer_count < 1050: 
                                 norm_speed = 30 #move forward some so red is flush with flap
                                 self.intake_timer_count+=1
 
-                            if self.intake_timer_count >= 975*factor and self.intake_timer_count < 1275*factor:
+                            if self.intake_timer_count >= 1050 and self.intake_timer_count < 1350:
                                 norm_speed = 0
                                 # deltaL = deltaR = 0 #stop
                                 self.activate_bird()
@@ -403,7 +403,7 @@ class StateMachineNode(Node):
                                 self.intake_timer_count+=1
 
 
-                            if self.intake_timer_count >= 1275*factor:
+                            if self.intake_timer_count >= 1350:
                                 self.intake_timer_count = 0
                                 self.block_intake = False
                                 
@@ -411,13 +411,13 @@ class StateMachineNode(Node):
 
                         elif queue[0]["type"] == 'green':
                             #sequence here for green only
-                            if self.intake_timer_count < 25:
+                            if self.intake_timer_count < 25*factor:
                                 norm_speed = 30 #move forward some so green is in elevator shaft
                                 self.intake_timer_count+=1
-                            if self.intake_timer_count >= 25 and self.intake_timer_count < 825:
+                            if self.intake_timer_count >= 25*factor and self.intake_timer_count < 925:
                                 self.activate_elevator()
                                 self.intake_timer_count +=1
-                            if self.intake_timer_count >= 825:
+                            if self.intake_timer_count >= 925:
                                 self.intake_timer_count = 0
                                 self.block_intake = False
                                 # self.scan_270_active = True
@@ -432,22 +432,22 @@ class StateMachineNode(Node):
                                 self.block_intake = False
                                 # self.scan_270_active = True
                     else:
-                        if self.intake_timer_count < 75*factor:
+                        if self.intake_timer_count < 75:
                             if queue[0]['type'] == 'green':
                                 self.angle4_flap = -90
                             self.intake_timer_count +=1
 
-                        if self.intake_timer_count >= 75*factor and self.intake_timer_count < 125*factor:
+                        if self.intake_timer_count >= 75 and self.intake_timer_count < 200:
                             self.get_logger().info('moving')
                             self.intake_timer_count +=1
                             norm_speed = 30
 
-                        if self.intake_timer_count >= 125*factor and self.intake_timer_count < 175*factor:
+                        if self.intake_timer_count >= 200 and self.intake_timer_count < 250:
                             self.get_logger().info('done moving')
                             norm_speed = 0
                             self.intake_timer_count += 1
 
-                        if self.intake_timer_count >= 175*factor:
+                        if self.intake_timer_count >= 250:
                             self.intake_timer_count = 0
                             self.moved = True
 
