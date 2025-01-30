@@ -4,12 +4,13 @@ from interfaces.msg import Box, Detect
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
 from ultralytics import YOLO
-
+import cv2
+import numpy as np
 
 class VisionNode(Node):
     def __init__(self):
         super().__init__('vision_node')
-        
+
         self.bridge = CvBridge()
         self.model = YOLO("src/robot/robot/weights.pt")
 
@@ -20,15 +21,18 @@ class VisionNode(Node):
         self.detect_pub = self.create_publisher(Detect, 'detect', 1)
 
         self.get_logger().info("Starting vision node")
-        
+
     def camera_callback(self, msg: CompressedImage):
-        frame = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
+        full_frame = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
+        hsv = cv2.cvtColor(full_frame, cv2.COLOR_BGR2HSV)
 
         # chop off top half of image
+        frame = full_frame
         frame[:240, :] = 0
 
         # run through model
         results = self.model(frame)
+        boxes = results[0].boxes
 
         widest = [Box(), Box()]
 
@@ -42,9 +46,26 @@ class VisionNode(Node):
             widest[i].width = 0
             widest[i].height = 0
 
-        for i in range(len(results[0].boxes)):
+        for i in range(len(boxes)):
             # get box data
-            box = results[0].boxes[i]
+            box = boxes[i]
+
+            # HS FILTER VARIABLES
+            coords = boxes.xyxy[i].round()
+            x1,x2 = int(coords[0]), int(coords[2])
+            y1,y2 = int(coords[1]), int(coords[3])
+
+            ############# HS FILTER #############
+            hsv_box = hsv[y1:y2, x1:x2]
+            avg_h, avg_s = np.mean(hsv_box, axis=(0,1))[0:2]
+
+            is_red = avg_h <= 15 or avg_h >= 165
+            is_green = avg_h >= 35 and avg_h <= 80
+
+            if avg_s <= 25 and not (is_red or is_green):
+                continue
+            ############# HS FILTER #############
+
             color = int(box.cls)
 
             # ignore spheres
@@ -70,10 +91,10 @@ class VisionNode(Node):
             widest[color].height = int(y_max - y_min)
             widest[color].x = int((x_min+x_max)/2) - 320
             widest[color].y = int((y_min+y_max)/2)
-        
+
         detect = Detect()
-        detect.green = widest[1]
-        detect.red = widest[0]
+        detect.green = widest[0]
+        detect.red = widest[1]
 
         # Publish the positions of the blocks
         self.detect_pub.publish(detect)
@@ -81,11 +102,11 @@ class VisionNode(Node):
         # Publish processed image
         # compressed_img_msg = self.bridge.cv2_to_compressed_imgmsg(frame)
         # self.processed_pub.publish(compressed_img_msg)
-        
+
 def main(args=None):
     rclpy.init(args=args)
     node = VisionNode()
-    
+
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
