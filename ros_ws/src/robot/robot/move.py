@@ -32,12 +32,12 @@ BASE_D = 269.0 #8.75 11.5
 BASE_RATIO = WHEEL_D / BASE_D
 
 MAX_VEL = 1.1 * TICK_ROT
-ACCEL = 0.8 * TICK_ROT
+ACCEL = 1.2 * TICK_ROT
 
 TURN_CONST = BASE_RATIO * 2 * math.pi / TICK_ROT
 ANGLE_PROP = 700
 
-LEFT_MOTOR = Raven.MotorChannel.CH4
+LEFT_MOTOR = Raven.MotorChannel.CH3
 RIGHT_MOTOR = Raven.MotorChannel.CH1
 BUCKET_MOTOR = Raven.MotorChannel.CH5
 
@@ -64,13 +64,13 @@ class MoveNode(Node):
         # setup motor
         self.raven.set_motor_encoder(LEFT_MOTOR, 0)
         self.raven.set_motor_mode(LEFT_MOTOR, Raven.MotorMode.POSITION)
-        self.raven.set_motor_torque_factor(LEFT_MOTOR, 80)
+        self.raven.set_motor_torque_factor(LEFT_MOTOR, 70)
         self.raven.set_motor_pid(LEFT_MOTOR, p_gain=20, i_gain=1, d_gain=.25)
         self.raven.set_motor_target(LEFT_MOTOR, 0)
         
         self.raven.set_motor_encoder(RIGHT_MOTOR, 0)
         self.raven.set_motor_mode(RIGHT_MOTOR, Raven.MotorMode.POSITION)
-        self.raven.set_motor_torque_factor(RIGHT_MOTOR, 80)
+        self.raven.set_motor_torque_factor(RIGHT_MOTOR, 70)
         self.raven.set_motor_pid(RIGHT_MOTOR, p_gain=-20, i_gain=-1, d_gain=-.25)
         self.raven.set_motor_target(RIGHT_MOTOR, 0)
 

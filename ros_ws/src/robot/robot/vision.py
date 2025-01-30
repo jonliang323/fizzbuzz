@@ -72,8 +72,8 @@ class VisionNode(Node):
             widest[color].y = int((y_min+y_max)/2)
         
         detect = Detect()
-        detect.green = widest[0]
-        detect.red = widest[1]
+        detect.green = widest[1]
+        detect.red = widest[0]
 
         # Publish the positions of the blocks
         self.detect_pub.publish(detect)

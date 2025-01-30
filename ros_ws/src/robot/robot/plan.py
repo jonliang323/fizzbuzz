@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import sys
+
 import threading
 import math
 import time
@@ -10,7 +12,7 @@ from interfaces.action import Start
 from interfaces.msg import Detect, Path
 from rclpy.action import ActionServer
 from rclpy.node import Node
-from std_msgs.msg import Bool, Float32
+from std_msgs.msg import Bool, Float32, Empty
 
 BASE_D = 269.0
 
@@ -23,7 +25,9 @@ class PlanNode(Node):
         super().__init__('plan')
 
         # start action server
-        self._action_server = ActionServer(self, Start, 'start', self.start_callback)
+        self.action_server = ActionServer(self, Start, 'start', self.start_callback)
+
+        self.end_timer = self.create_timer(1, self.check_time)
 
         # computer vision
         self.load_detect = True
@@ -44,15 +48,18 @@ class PlanNode(Node):
         self.elevator_pub = self.create_publisher(Float32, 'elevator', 10)
         self.flap_pub = self.create_publisher(Float32, 'flap', 10)
 
+
         # initialize servo position defaults
         self.drop_duck()
         self.close_claw()
         self.lift_elevator()
-        self.close_flap()
+        self.open_flap()
 
         # other runtime variables
         self.has_sphere = False
-        self.bottom_color = None # set later
+        self.bottom_color = Color.GREEN # set later
+        self.startTime = 0
+        self.started = False
 
         self.get_logger().info("Plan node has started")
 
@@ -72,8 +79,11 @@ class PlanNode(Node):
     # returns color of closest block
     # requires block to exist
     def closest_block(self):
-        if self.detect.green.height >= self.detect.red.height:
+        if self.detect.green.y >= self.detect.red.y:
+            self.get_logger().info("Detected green")
             return Color.GREEN
+        
+        self.get_logger().info("Detected red")
         return Color.RED
     
     # calculates x, y relative coordinates of closest block in inches
@@ -89,7 +99,7 @@ class PlanNode(Node):
         BLOCK_SIZE = 2 # inches
 
         # calculate y
-        y = 480/(box.height*math.tan(VFOV/2))
+        y = 480/(max(box.height, box.width)*math.tan(VFOV/2))
 
         # calculate x
         theta = box.x * (HFOV/640)
@@ -104,6 +114,8 @@ class PlanNode(Node):
         x -= 2.9
         y -= 0.5
 
+        self.get_logger().info(f'x {x} y {y}')
+
         return (x,y)
 
     ###################### callback functions ##########################
@@ -115,6 +127,13 @@ class PlanNode(Node):
     def moving_callback(self, msg):
         self.moving = msg.data
 
+    def check_time(self):
+        if self.started and (time.time() - self.startTime) > 135:
+            self.get_logger().info("Time up, exiting")
+            self.open_claw()
+            time.sleep(2)
+            sys.exit(0)
+
     ################## helper publish functions ######################
     # left and right are coefficients
     def pub_path(self, left, right, distance):
@@ -125,12 +144,13 @@ class PlanNode(Node):
         self.path_pub.publish(msg)
 
     def wait_path(self):
+        time.sleep(0.5)
         while self.moving:
             time.sleep(0.1)
     
-    def pub_bucket(self, dir):
-        msg = Bool()
-        msg.data = dir
+    def pub_bucket(self, speed):
+        msg = Float32()
+        msg.data = float(speed)
         self.bucket_pub.publish(msg)
 
     def pub_duck(self, position):
@@ -159,12 +179,14 @@ class PlanNode(Node):
         self.wait_path()
 
     def lift_bucket(self):
-        self.pub_bucket(True)
-        time.sleep(3) #TODO
+        self.pub_bucket(100)
+        time.sleep(4.5) #TODO
+        self.pub_bucket(0)
 
     def drop_bucket(self):
-        self.pub_bucket(False)
-        time.sleep(3) #TODO
+        self.pub_bucket(-100)
+        time.sleep(4.2) #TODO
+        self.pub_bucket(0)
     
     def lift_duck(self):
         self.pub_duck(-80) #TODO
@@ -176,26 +198,26 @@ class PlanNode(Node):
 
     def open_claw(self):
         self.pub_claw(-45) #TODO
-        time.sleep(0.5) #TODO
+        time.sleep(1) #TODO
 
     def close_claw(self):
-        self.pub_claw(-20) #TODO
-        time.sleep(0.5) #TODO
+        self.pub_claw(-19) #TODO
+        time.sleep(1) #TODO
 
     def lift_elevator(self):
         self.pub_elevator(90) #TODO
-        time.sleep(1.0) #TODO
+        time.sleep(2.0) #TODO
 
     def drop_elevator(self):
-        self.pub_elevator(-70) #TODO
-        time.sleep(1.0) #TODO
+        self.pub_elevator(-80) #TODO
+        time.sleep(2.0) #TODO
 
     def open_flap(self):
         self.pub_flap(-90) #TODO
         time.sleep(1.0) #TODO
 
     def close_flap(self):
-        self.pub_flap(40) #TODO
+        self.pub_flap(45) #TODO
         time.sleep(1.0) #TODO
 
     ####################### approach drive functions ###############################
@@ -216,7 +238,7 @@ class PlanNode(Node):
             z = b_in/(2*r)
 
             # strange constant, but affects turn sharpness
-            z /= 2
+            z /= 1.9
 
             path.left = 1 + z
             path.right = 1 - z
@@ -225,6 +247,8 @@ class PlanNode(Node):
         
         self.path_pub.publish(path)
         self.get_logger().info(f"Path {path.left:.3f}, {path.right:.3f}, {path.distance:.3f}")
+        self.wait_path()
+        self.pub_path(1, 1, 2)
         self.wait_path()
 
     ####################### main program functions ##########################
@@ -235,17 +259,20 @@ class PlanNode(Node):
 
         self.open_claw()
         self.drop_elevator()
+        
         self.close_claw()
         
         # drive backward incase flap is obstructed
-        self.pub_path(-1, -1, 3) #TODO maybe change
+        self.pub_path(-1, -1, 4.5)
         self.wait_path()
 
+        self.open_claw()
         self.close_flap()
 
         # optional reopen and close claw for better grip
-        # self.open_claw()
-        # self.close_claw()
+        self.pub_path(1, 1, 1)
+        time.sleep(0.2)
+        self.close_claw()
 
         self.lift_elevator()
 
@@ -255,7 +282,7 @@ class PlanNode(Node):
         self.open_flap()
 
         # drive forward
-        self.pub_path(1, 1, 4) #TODO
+        self.pub_path(1, 1, 6) #TODO
         self.wait_path() #TODO
 
         self.stack()
@@ -264,8 +291,12 @@ class PlanNode(Node):
         self.get_logger().info("Collecting red")
 
         # drive to block
-        self.pub_path(1, 1, 4) #TODO
+        self.pub_path(1, 1, 5) #TODO
         self.wait_path()
+
+        # move flap to hit red
+        self.pub_flap(25)
+        time.sleep(2)
 
         self.lift_duck()
         self.drop_duck()
@@ -275,21 +306,42 @@ class PlanNode(Node):
         self.get_logger().info("Collecting sphere")
 
         self.drop_bucket()
-
-        # knock off ball (drive backward)
-        self.pub_path(-1, -1, 5) #TODO
-        self.wait_path()
-
         self.open_flap()
 
+        # knock off ball (drive backward)
+        self.pub_path(-1, -1, 7) #TODO
+        self.wait_path()
+        time.sleep(1)
+
+        self.open_claw()
+        self.drop_elevator()
+
         # drive to ball
-        self.pub_path(1, 1, 6) #TODO
+        self.pub_path(1, 1, 13) #TODO
         self.wait_path()
 
         # stack sequence
-        self.stack()
+        self.close_claw()
+        
+        time.sleep(2)
+
+        # drive backward incase flap is obstructed
+        self.pub_path(-1, -1, 4.5)
+        self.wait_path()
+        time.sleep(0.5)
+
+        self.open_claw()
+        self.close_flap()
+
+        # optional reopen and close claw for better grip
+        self.pub_path(1, 1, 2)
+        time.sleep(0.2)
+        self.close_claw()
+
+        self.lift_elevator()
 
     def collect_all(self):
+        self.get_logger().info('entered collect all')
         # collect sphere
         if not self.has_sphere:
             self.has_sphere = True
@@ -305,9 +357,13 @@ class PlanNode(Node):
         # collect in proper order
         if self.bottom_color == Color.GREEN:
             self.collect_green()
+            self.pub_path(1, 1, 4)
+            self.wait_path()
             self.collect_red()
         else:
             self.collect_red()
+            self.pub_path(1, 1, 4)
+            self.wait_path()
             self.collect_green()
 
     def approach(self):
@@ -321,17 +377,29 @@ class PlanNode(Node):
         # log move
         self.get_logger().info(f"Closest color is {"green" if self.bottom_color==Color.GREEN else "red"} at {x}, {y}: distance {distance}")
 
-        DIST_THRESH = 12 # inches
-        DIST_RECALC = 10 # inches
+        DIST_THRESH = 18 # inches
+        DIST_RECALC = 8 # inches
 
         if distance > DIST_THRESH:
+            self.get_logger().info('second detect entered')
             # drive about 10 inches from block
             percent = (distance-DIST_RECALC)/distance
             self.drive_to(x, y, percent)
+            time.sleep(1.5)
 
             # get new block detect data
             # TODO check if valid block seen
             self.wait_detect()
+
+            iter = 0
+            while not self.block_visible():
+                if iter>=2:
+                    self.get_logger().info('second detect failed')
+                    return False
+                    #break and search
+                iter+=1
+                self.wait_detect()
+
             # recalculate position of closest block
             self.bottom_color = self.closest_block()
             x, y = self.block_coordinates(self.bottom_color)
@@ -339,11 +407,14 @@ class PlanNode(Node):
             # relog for double take
             self.get_logger().info(f"Closest color is {"green" if self.bottom_color==Color.GREEN else "red"} at {x}, {y}: distance {distance}")
 
+        self.get_logger().info('about to drive')
+
         # drive all the way to the block
         self.drive_to(x, y, 1)
 
         # delay
-        self.pub_path(1, 1, 2)
+        self.pub_path(1, 1, 1)
+        return True
         
 
     def search(self):
@@ -372,16 +443,30 @@ class PlanNode(Node):
     def run(self):
         self.get_logger().info("Program started")
 
-        # grab next CV
+        self.startTime = time.time()
+        self.started = True
+
+        # self.collect_all()
+        # self.collect_green()
+        # self.collect_red()
+
+        self.pub_path(1, 1, 6)
+        time.sleep(1.5)
+        # self.pub_path(-1, -1, 4)
+        # time.sleep(1)
+
+        # # grab next CV
         self.wait_detect()
 
-        self.search()
-        self.approach()
-        
-        for i in range(5):
-            # TODO add drop off logic at the end either timer or loop
+        # self.search()
+        # self.approach()
+        # self.jerk_pub.publish(Empty())
+
+        for i in range(100):
             self.search()
-            self.approach()
+            complete = self.approach()
+            if not complete:
+                continue
             self.collect_all()
         
         self.deploy()
