@@ -1,3 +1,4 @@
 int64 encoder_pos1
 int64 encoder_pos4
+bool clear_encoders
 int64 dt_speed

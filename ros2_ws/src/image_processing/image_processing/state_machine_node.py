@@ -29,6 +29,9 @@ class StateMachineNode(Node):
         #encoder variables
         self.delta_encoderL = 0
         self.delta_encoderR = 0
+        self.clear_encoders = False
+        self.target_encoderR = 0
+        self.target_encoderL = 0
         self.ENCODER_RES = 640
 
         #heading, positioning variables
@@ -193,14 +196,15 @@ class StateMachineNode(Node):
         self.orange_tape_ratio = msg.orange_tape_ratio
         self.height_range = msg.height_range
 
-    # def delta_encoder_callback(self, msg: EncoderCounts):
-    #     self.delta_encoderR = msg.encoder1
-    #     self.delta_encoderL = msg.encoder2
-    #     #self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}') #here
-    #     #only update angle here, after encoder deltas have been sent, to be read once per cycle
-    #     self.update_angle_and_pos()
-    #     #self.get_logger().info(f'current_angle: {self.current_angle}')
-    #     #self.get_logger().info(f'current_position: {self.current_pos}')
+    def delta_encoder_callback(self, msg: EncoderCounts):
+        delta_encoderR = msg.encoder1
+        delta_encoderL = msg.encoder2
+        #self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}') #here
+        #only update angle here, after encoder deltas have been sent, to be read once per cycle
+        # self.update_angle_and_pos()
+        if abs(delta_encoderR - self.target_encoderR) < 5 and abs(delta_encoderL - self.target_encoderL) < 5:
+            self.clear_encoders = True
+            self.current_angle = self.turn_angle
 
     #TODO detecting wall, staying away from wall
     #TODO identifying divider wall, moving towards it when using dumptruck
@@ -212,8 +216,8 @@ class StateMachineNode(Node):
     def state_machine_callback(self): #called every 0.01 seconds
         self.competition_timer_count += 1
         if self.competition_timer_count <= 13500:
-            deltaL, deltaR = 0,0
-            norm_speed = 0 #no decel
+            encoder_posL = 0
+            encoder_posR = 0
 
             if self.camera_startup:
                 if self.competition_timer_count > 200:
@@ -226,25 +230,19 @@ class StateMachineNode(Node):
 
             if self.scan_270_active:
                 #spins full 270
-                if self.turn_angle <= 0: #320
+                if self.turn_angle <= 320: #320
                     #turns 270 degrees
                     #scan_blocks is initially true
                     self.get_logger().info(f'target: {self.turn_angle}, current: {self.current_angle}, angle diff: {self.turn_angle - self.current_angle}') #here
-                    if not self.yolo_scan and abs(self.current_angle - self.turn_angle) > 10: #ccw turn, + angle
-
-                        gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
-                        gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
-
-                        angle_err = self.turn_angle - self.current_angle
-                        deltaL, deltaR = self.PID(angle_err, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
-                        self.prev_error_turn = angle_err
-
+                    if not self.yolo_scan and (abs(self.target_encoderL - self.delta_encoderL) > 5 or abs(self.target_encoderR - self.delta_encoderR) > 5): #ccw turn, + angle
+                        encoder_posL = -self.get_encoder_count(self.turn_angle*math.pi/180*self.BASE_RADIUS)
+                        encoder_posR = self.get_encoder_count(self.turn_angle*math.pi/180*self.BASE_RADIUS)
                     elif not self.yolo_scan: #just finished turning, next yolo scan
                         self.yolo_scan = True
                         self.save_scan = True
 
                     else:
-                        deltaL = deltaR = 0
+                        encoder_posR, encoder_posL = 0,0
                         self.scan_timer +=1
                         if self.scan_timer >= 75: #.75 seconds
                             self.get_logger().info('exiting to next turn')
@@ -253,8 +251,7 @@ class StateMachineNode(Node):
                             self.scan_timer = 0
                 else: #scan is complete
                     #pass
-                    deltaL = 0
-                    deltaR = 0
+                    encoder_posR, encoder_posL = 0,0
                     #process list
                     if len(self.detected_objects) > 0:
                         closest = self.find_closest_index([obj["size"] for obj in self.detected_objects])
@@ -266,11 +263,12 @@ class StateMachineNode(Node):
                         self.get_logger().info(f'These are our objects: {self.detected_objects}')
                         self.detected_objects = []
                         self.scan_270_active = False
-                        # self.target_align = True
+                        self.target_align = True
                         self.target_drive = True
                         self.yolo_scan = True #should be False
                         self.save_scan = True #should be False
                         self.prev_error_turn = 0
+                        self.turn_angle = self.target['angle'] - self.current_angle
                     elif len(self.detected_objects) == 0 and self.stack_counter < 5:
                         #TODO: if no cubes found while there are still cubes to be found --> scan again
                         self.turn_angle = 0
@@ -281,22 +279,13 @@ class StateMachineNode(Node):
                         # self.activate_dumptruck()
 
             if self.target_align:
-                self.get_logger().info(f'aligning....target angle: {self.target['angle']}, current angle: {self.current_angle}')
-                if abs(self.target['angle'] - self.current_angle) > 10:
-                # if abs(self.turn_angle - self.current_angle) > 10:
-                    #*** turn to face self.target["angle"] here:
-                    gainsL = (self.p_gainL_turn, self.i_gainL_turn, self.d_gainL_turn)
-                    gainsR = (self.p_gainR_turn, self.i_gainR_turn, self.d_gainR_turn)
-
-                    angle_error = (self.target['angle'] - self.current_angle + 180) % 360 - 180
-
-                    #self.error_deriv = (angle_error - self.prev_error_turn)/self.dT
-                    deltaL, deltaR = self.PID(angle_error, self.prev_error_turn, self.error_integralL_turn, self.error_integralR_turn, gainsL, gainsR)
-                    #self.get_logger().info(f'deltas: {deltaL, deltaR}')
-                    self.prev_error_turn = angle_error
+                #self.get_logger().info(f'aligning....target angle: {self.target['angle']}, current angle: {self.current_angle}')
+                if abs(self.target_encoderL - self.delta_encoderL) > 5 or abs(self.target_encoderR - self.delta_encoderR) > 5:
+                    encoder_posL = -self.get_encoder_count(self.turn_angle*math.pi/180*self.BASE_RADIUS)
+                    encoder_posR = self.get_encoder_count(self.turn_angle*math.pi/180*self.BASE_RADIUS)
                 else:
                     #TODO constant scan for cube -> find % cube of screen -> have time delay? sparse scanning
-                    deltaL = deltaR = 0
+                    encoder_posR, encoder_posL = 0,0
                     self.yolo_scan = True #save_scan is still False for target_drive
                     self.target_align = False
                     self.target_drive = True
@@ -491,7 +480,8 @@ class StateMachineNode(Node):
 
 
         else:
-
+            encoder_posL = 0
+            encoder_posR = 0
             #activate_dumptruck()
             norm_speed = 0
             deltaL = deltaR = 0
@@ -506,8 +496,11 @@ class StateMachineNode(Node):
 
         #set motor speeds
         # self.get_logger().info(f'speeds: {norm_speed, deltaL, deltaR}')
-        dc.left_speed = int(norm_speed + deltaL)
-        dc.right_speed = int(norm_speed + deltaR)
+        self.target_encoderL = encoder_posL
+        self.target_encoderR = encoder_posR
+        dc.encoder_pos1 = encoder_posL
+        dc.encoder_pos4 = encoder_posR
+        dc.clear_encoders = self.clear_encoders
         dc.dt_speed = self.dt_speed
         servo.angle1_duck = self.angle1_duck
         servo.angle2_claw = self.angle2_claw
