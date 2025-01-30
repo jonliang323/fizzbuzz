@@ -185,14 +185,14 @@ class StateMachineNode(Node):
         self.orange_tape_ratio = msg.orange_tape_ratio
         self.height_range = msg.height_range
 
-    def delta_encoder_callback(self, msg: EncoderCounts):
-        self.delta_encoderR = msg.encoder1
-        self.delta_encoderL = msg.encoder2
-        #self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}') #here
-        #only update angle here, after encoder deltas have been sent, to be read once per cycle
-        self.update_angle_and_pos()
-        #self.get_logger().info(f'current_angle: {self.current_angle}')
-        #self.get_logger().info(f'current_position: {self.current_pos}')
+    # def delta_encoder_callback(self, msg: EncoderCounts):
+    #     self.delta_encoderR = msg.encoder1
+    #     self.delta_encoderL = msg.encoder2
+    #     #self.get_logger().info(f'{self.delta_encoderL, self.delta_encoderR}') #here
+    #     #only update angle here, after encoder deltas have been sent, to be read once per cycle
+    #     self.update_angle_and_pos()
+    #     #self.get_logger().info(f'current_angle: {self.current_angle}')
+    #     #self.get_logger().info(f'current_position: {self.current_pos}')
 
     #TODO detecting wall, staying away from wall
     #TODO identifying divider wall, moving towards it when using dumptruck

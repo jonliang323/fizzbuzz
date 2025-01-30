@@ -1,3 +1,3 @@
-int8 left_speed
-int8 right_speed
-int8 dt_speed
+int64 encoder_pos1
+int64 encoder_pos4
+int64 dt_speed
