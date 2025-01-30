@@ -378,13 +378,13 @@ class PlanNode(Node):
         self.search()
         self.approach()
         
-        # for i in range(5):
-        #     # TODO add drop off logic at the end either timer or loop
-        #     self.search()
-        #     self.approach()
-        #     self.collect_all()
+        for i in range(5):
+            # TODO add drop off logic at the end either timer or loop
+            self.search()
+            self.approach()
+            self.collect_all()
         
-        # self.deploy()
+        self.deploy()
 
         self.get_logger().info("Program ended")
 
