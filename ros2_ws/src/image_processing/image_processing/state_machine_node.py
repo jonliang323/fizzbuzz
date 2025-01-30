@@ -84,6 +84,7 @@ class StateMachineNode(Node):
         self.wall_height_screen_ratio = 0
         self.orange_tape_ratio = 0
         self.orange_wall_found = False
+        
 
         #elevator variables
         self.block_intake = True #True
@@ -106,6 +107,13 @@ class StateMachineNode(Node):
         self.moved = False
         self.dumptruck_state = 'dumping'
         self.dt_speed = 0
+
+
+        self.flap = False
+        self.first_flap = False
+        self.move_forward1 = False
+        self.move_forward2 = False
+        self.move_forward3 = False
 
 
         self.competition_timer_count = 0
@@ -321,7 +329,12 @@ class StateMachineNode(Node):
                     deltaL, deltaR = 0,0
                     self.yolo_scan = False
                     self.target_drive = False
-                    # self.block_intake = True
+                    self.flap = False
+                    self.first_flap = False
+                    self.move_forward1 = False
+                    self.move_forward2 = False
+                    self.move_forward3 = False
+                    self.block_intake = True
                     self.prev_error_drive = 0
 
             if self.block_intake:
@@ -353,28 +366,31 @@ class StateMachineNode(Node):
 
 
                     # deltaL = deltaR = 0 #go forwards a little here (ex. 1 sec) to have it move forward enough so that red block would be flush against flap and would knock stack over
-                    factor = 2.5
+                    # factor = 2.5
                     if self.moved:
                         if queue[1] is not None and queue[1]["type"] == 'green':
+                            self.move_forward1 = False #move this up to init later
                             #sequence here for red then green
-                            if self.intake_timer_count < 300:
-                                self.intake_timer_count +=1
+                            if self.duck == False:
+                                # self.intake_timer_count +=1
                                 self.activate_bird()
-                            if self.intake_timer_count < 300 and self.intake_timer_count >= 400:
-                                self.intake_timer_count +=1
-                            if self.intake_timer_count >= 400 and self.intake_timer_count < 450:
+                            # if self.intake_timer_count < 300 and self.intake_timer_count >= 400:
+                            if self.duck and self.move_forward1 == False:
+                                self.get_encoder_count(12)
+                                self.move_forward1 = True
+                            if self.duck and self.move_forward1 and self.flap == False:
                                 self.angle4_flap = -90
-                                self.intake_timer_count +=1
-                            if self.intake_timer_count >= 450 and self.intake_timer_count < 500:
-                                norm_speed = 30  #move forward some so green is in elevator shaft
-                                self.intake_timer_count +=1
-                            if self.intake_timer_count >= 500 and self.intake_timer_count < 1300:
-                                norm_speed = 0
+                                # self.intake_timer_count +=1
+                                self.flap = True
+                            if self.duck and self.move_forward1 and self.flap and self.move_forward2 == False:
+                                # norm_speed = 30  #move forward some so green is in elevator shaft
+                                self.get_encoder_count(7)
+                                self.move_forward2 = True
+                            if self.duck and self.move_forward1 and self.flap and self.move_forward2 and self.elevator == False:
                                 self.activate_elevator()
-                            if self.intake_timer_count >= 1300:
-                                self.intake_timer_count = 0
+                            if self.duck and self.move_forward1 and self.flap and self.move_forward2 and self.elevator:
                                 self.block_intake = False
-                                # self.scan_270_active = True
+                                self.scan_270_active = True
 
 
 
@@ -382,73 +398,88 @@ class StateMachineNode(Node):
                             self.get_logger().info(f"in stack queue: {queue[0]["type"]} {queue[1]["type"]}")
                             #seqeunce here for green then red
 
-                            if self.intake_timer_count >= 0 and self.intake_timer_count < 25*factor:
-                                norm_speed = 30 #move forward some so green is in elevator shaft
-                                self.intake_timer_count +=1
-                                self.get_logger().info("going to elevator activation")
-                            if self.intake_timer_count >= 25*factor and self.intake_timer_count < 925: 
-                                norm_speed = 0
+                            # if self.intake_timer_count >= 0 and self.intake_timer_count < 25*factor:
+                            if self.move_forward1 == False:
+                                # norm_speed = 30 #move forward some so green is in elevator shaft
+                                self.get_encoder_count(7)
+                                # self.intake_timer_count +=1
+                                # self.get_logger().info("going to elevator activation")
+                                self.move_forward1 = True
+                            # if self.intake_timer_count >= 25*factor and self.intake_timer_count < 925:
+                            if self.move_forward1 and self.elevator == False: 
+                                # norm_speed = 0
                                 self.activate_elevator()
-                                self.intake_timer_count +=1
+                                # self.intake_timer_count +=1
 
-                            if self.intake_timer_count >= 925 and self.intake_timer_count < 975: 
-                                norm_speed = 30 #move forward some so red is flush with flap
-                                self.intake_timer_count+=1
+                            # if self.intake_timer_count >= 925 and self.intake_timer_count < 975:
+                            if self.move_forward1 and self.elevator and self.move_forward2 == False:
+                                # norm_speed = 30 #move forward some so red is flush with flap
+                                # self.intake_timer_count+=1
+                                self.get_encoder_count(10)
+                                self.move_forward2 = True
 
-                            if self.intake_timer_count >= 975*factor and self.intake_timer_count < 1275*factor:
-                                norm_speed = 0
+                            # if self.intake_timer_count >= 975*factor and self.intake_timer_count < 1275*factor:
+                            if self.move_forward1 and self.elevator and self.move_forward2 and self.bird == False:
+                                # norm_speed = 0
                                 # deltaL = deltaR = 0 #stop
                                 self.activate_bird()
 
-                                self.intake_timer_count+=1
+                                # self.intake_timer_count+=1
 
 
-                            if self.intake_timer_count >= 1275*factor:
-                                self.intake_timer_count = 0
+                            if self.move_forward1 and self.elevator and self.move_forward2 and self.bird:
+
                                 self.block_intake = False
                                 
-                                # self.scan_270_active = True
+                                self.scan_270_active = True
 
                         elif queue[0]["type"] == 'green':
                             #sequence here for green only
-                            if self.intake_timer_count < 25:
-                                norm_speed = 30 #move forward some so green is in elevator shaft
-                                self.intake_timer_count+=1
-                            if self.intake_timer_count >= 25 and self.intake_timer_count < 825:
+                            # if self.intake_timer_count < 25:
+                            if self.move_forward1 == False:
+                                # norm_speed = 30 #move forward some so green is in elevator shaft
+                                self.get_encoder_count(7)
+                                # self.intake_timer_count+=
+                                self.move_forward1 = True
+                            # if self.intake_timer_count >= 25 and self.intake_timer_count < 825:
+                            if self.move_forward1 and self.elevator == False:
                                 self.activate_elevator()
-                                self.intake_timer_count +=1
-                            if self.intake_timer_count >= 825:
-                                self.intake_timer_count = 0
+                                # self.intake_timer_count +=1
+                            # if self.intake_timer_count >= 825:
+                            if self.move_forward1 and self.elevator:
+                                # self.intake_timer_count = 0
                                 self.block_intake = False
-                                # self.scan_270_active = True
+                                self.scan_270_active = True
 
                         elif queue[0]["type"] == 'red':
                             #sequence here for red only
-                            if self.intake_timer_count < 300:
+                            # if self.intake_timer_count < 300:
+                            if self.duck == False:
                                 self.activate_bird()
-                                self.intake_timer_count +=1
-                            if self.intake_timer_count >= 300:
-                                self.intake_timer_count = 0
+                                # self.intake_timer_count +=1
+                            # if self.intake_timer_count >= 300:
+                            if self.duck:
+                                # self.intake_timer_count = 0
                                 self.block_intake = False
-                                # self.scan_270_active = True
+                                self.scan_270_active = True
                     else:
-                        if self.intake_timer_count < 75*factor:
+                        # if self.intake_timer_count < 75*factor:
+                        if self.first_flap == False:
                             if queue[0]['type'] == 'green':
                                 self.angle4_flap = -90
-                            self.intake_timer_count +=1
+                            # self.intake_timer_count +=1
+                            self.first_flap = True
 
-                        if self.intake_timer_count >= 75*factor and self.intake_timer_count < 125*factor:
+                        # if self.intake_timer_count >= 75*factor and self.intake_timer_count < 125*factor:
+                        if self.first_flap and self.move_forward3 == False:
                             self.get_logger().info('moving')
-                            self.intake_timer_count +=1
-                            norm_speed = 30
+                            # self.intake_timer_count +=1
+                            # norm_speed = 30
+                            self.get_encoder_count(13.46)
+                            self.move_forward3 = True
 
-                        if self.intake_timer_count >= 125*factor and self.intake_timer_count < 175*factor:
-                            self.get_logger().info('done moving')
-                            norm_speed = 0
-                            self.intake_timer_count += 1
-
-                        if self.intake_timer_count >= 175*factor:
-                            self.intake_timer_count = 0
+                        # if self.intake_timer_count >= 125*factor and self.intake_timer_count < 175*factor:
+                        if self.first_flap and self.move_forward3:
                             self.moved = True
 
 
