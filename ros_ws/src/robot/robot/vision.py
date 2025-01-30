@@ -24,15 +24,52 @@ class VisionNode(Node):
         self.get_logger().info("Starting vision node")
         self.num_saved = 1
         self.save = True
-        self.COLOR_VALUES = [(0,255,0), (255,0,0), (0,0,255)]
+        self.COLOR_VALUES = [(0,255,0), (0,0,255), (255,0,0)]
         
     def camera_callback(self, msg: CompressedImage):
-        full_frame = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
-        hsv = cv2.cvtColor(full_frame, cv2.COLOR_BGR2HSV)
+        frame = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+        #preprocess to get rid of pixels above blue tape
+        #Blue processing
+        blue_mask = cv2.inRange( #output b and w mask, w pixels are blue
+            hsv,
+            np.array([int(190/2),int(0.5*255),int(0.1*255)]), #min hsv blue 228 60 20
+            np.array([int(240/2),int(8*255),int(0.5*255)]), #max hsv blue
+        )
+        blue_temp = np.where(blue_mask == 255) #tuple of row col lists
+        if blue_temp == []:
+            blue_locs = [(0,0,'b')] #default, would clear top left corner if no blue detected
+        else:
+            blue_locs = list(zip(blue_temp[0],blue_temp[1],['b']*len(blue_temp[0])))
+        #Orange processing
+        # orange_mask = cv2.inRange( #output b and w mask, w pixels are orange
+        #     hsv,
+        #     np.array([int(20/2),int(0.82*255),int(0.35*255)]), #min hsv orange
+        #     np.array([int(32/2),int(1*255),int(0.7*255)]), #max hsv orange
+        # )
+        # orange_temp = np.where(orange_mask == 255) #tuple of row col lists
+        # if orange_temp == []:
+        #     orange_locs = []
+        # else:
+        #     orange_locs = list(zip(orange_temp[0],orange_temp[1],['o']*len(orange_temp[0])))
+        orange_locs = []
+        
+        col = 0
+        all_locs = sorted(blue_locs + orange_locs, key=lambda x:(x[1],x[0])) #sort (row, col, color) locs by col, then row
+        #finds maximum orange,blue row values associated to each col, then clears image above that row
+        for i in range(len(all_locs)):
+            if i == len(all_locs) - 1 or all_locs[i+1][1] != col: #found transition to next col, or last col
+                max_masked_loc = all_locs[i]
+                # if max_masked_loc[2] == 'b':
+                frame[:max_masked_loc[0],col] = (0,0,0)
+                # else: # == 'o' for visual debugging
+                #     frame[:max_masked_loc[0],col] = (255,255,255)
+                col += 1
 
         # chop off top half of image
-        frame = full_frame
-        frame[:240, :] = 0
+        # frame = full_frame
+        # frame[:240, :] = 0
 
         # run through model
         results = self.model(frame)
@@ -66,7 +103,7 @@ class VisionNode(Node):
             is_red = avg_h <= 15 or avg_h >= 165
             is_green = avg_h >= 35 and avg_h <= 80
 
-            if avg_s <= 25 and not (is_red or is_green):
+            if avg_s <= 12 and not (is_red or is_green):
                 continue
             ############# HS FILTER #############
 
@@ -96,13 +133,14 @@ class VisionNode(Node):
             widest[color].x = int((x_min+x_max)/2) - 320
             widest[color].y = int((y_min+y_max)/2)
 
-            if self.save:
-                cv2.rectangle(frame,(x_min,y_min),(x_max,y_max),self.COLOR_VALUES[color],2) #output bounding box
+            if self.save and self.num_saved%10 == 0:
+                cv2.rectangle(frame,(int(x_min),int(y_min)),(int(x_max),int(y_max)),self.COLOR_VALUES[color],2) #output bounding box
 
         if self.save:
-            cv2.imwrite(f'./pics/{self.num_saved}.jpg', frame)
+            if self.num_saved%8 == 0:
+                cv2.imwrite(f'./pics/{self.num_saved}.jpg', frame)
             self.num_saved += 1
-            if self.num_saved > 5:
+            if self.num_saved > 200:
                 self.save = False
         
         detect = Detect()

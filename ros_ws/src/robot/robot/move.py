@@ -12,7 +12,8 @@
 # ros2 topic pub /path interfaces/msg/Path "{left: 1, right: -1, distance: 500}" --once
 # ros2 launch robot camera_launch.py
 # ros2 topic pub /path interfaces/msg/Path"{left: 1.0, right: 1.0, distance: 5000}" --once
-# ros2 topic pub /bucket std_msgs/msg/Bool "{data: True}" --once
+# ros2 topic pub /bucket std_msgs/msg/Float32 "{data: 0}" --once
+# ros2 topic pub /bucket std_msgs/msg/Float32 "{data: 100}" --once
 
 import math
 

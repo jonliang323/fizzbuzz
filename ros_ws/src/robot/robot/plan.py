@@ -80,7 +80,7 @@ class PlanNode(Node):
     # requires block to exist
     def closest_block(self):
         if self.detect.green.y >= self.detect.red.y:
-            self.get_logger().info("Detected green")
+            self.get_logger().info(f"Detected green {self.detect.green.y}")
             return Color.GREEN
         
         self.get_logger().info("Detected red")
@@ -184,7 +184,7 @@ class PlanNode(Node):
         self.pub_bucket(0)
 
     def drop_bucket(self):
-        self.pub_bucket(100)
+        self.pub_bucket(-100)
         time.sleep(4.2) #TODO
         self.pub_bucket(0)
     
@@ -193,7 +193,7 @@ class PlanNode(Node):
         time.sleep(2) #TODO
 
     def drop_duck(self):
-        self.pub_duck(60) #TODO
+        self.pub_duck(65) #TODO
         time.sleep(1.5) #TODO
 
     def open_claw(self):
@@ -364,6 +364,8 @@ class PlanNode(Node):
             self.wait_path()
             self.collect_red()
         else:
+            self.close_flap()
+            time.sleep(1)
             self.collect_red()
             self.pub_path(1, 1, 4)
             self.wait_path()
@@ -380,8 +382,8 @@ class PlanNode(Node):
         # log move
         self.get_logger().info(f"Closest color is {"green" if self.bottom_color==Color.GREEN else "red"} at {x}, {y}: distance {distance}")
 
-        DIST_THRESH = 18 # inches
-        DIST_RECALC = 8 # inches
+        DIST_THRESH = 30 # inches
+        DIST_RECALC = 15 # inches left <30
 
         if distance > DIST_THRESH:
             self.get_logger().info('second detect entered')
