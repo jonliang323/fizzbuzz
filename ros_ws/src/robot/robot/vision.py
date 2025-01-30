@@ -35,8 +35,7 @@ class VisionNode(Node):
         widest = [Box(), Box()]
 
         MIN_WIDTH = 10
-        EDGE_TOLERANCE = 3
-        SQUARE_TOLERANCE = 0.7
+        EDGE_TOLERANCE = 2
 
         # initialize boxes
         for i in range(2):
